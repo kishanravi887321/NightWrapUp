@@ -19,13 +19,16 @@ export const saveSong = async (request, response, next) => {
       throw error;
     }
 
+    const metadata = await fetchYouTubeMetadata(youtubeUrl, youtubeVideoId);
     const song = await Song.findOneAndUpdate(
       { user: request.user.id, library: library._id, youtubeVideoId },
       {
         ...request.body,
-        title: request.body.title || `YouTube video ${youtubeVideoId}`,
+        title: request.body.title || metadata.title || `YouTube video ${youtubeVideoId}`,
         youtubeUrl,
         youtubeVideoId,
+        thumbnail: request.body.thumbnail || metadata.thumbnail,
+        channelName: request.body.channelName || metadata.channelName,
         user: request.user.id,
         library: library._id,
       },
@@ -36,6 +39,35 @@ export const saveSong = async (request, response, next) => {
     next(error);
   }
 };
+
+async function fetchYouTubeMetadata(youtubeUrl, youtubeVideoId) {
+  const fallback = {
+    title: null,
+    channelName: null,
+    thumbnail: `https://i.ytimg.com/vi/${youtubeVideoId}/hqdefault.jpg`,
+  };
+
+  try {
+    const metadataUrl = new URL('https://www.youtube.com/oembed');
+    metadataUrl.searchParams.set('url', youtubeUrl);
+    metadataUrl.searchParams.set('format', 'json');
+
+    const response = await fetch(metadataUrl, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return fallback;
+
+    const data = await response.json();
+    return {
+      title: typeof data.title === 'string' ? data.title.trim() : fallback.title,
+      channelName: typeof data.author_name === 'string' ? data.author_name.trim() : fallback.channelName,
+      thumbnail: typeof data.thumbnail_url === 'string' ? data.thumbnail_url : fallback.thumbnail,
+    };
+  } catch (error) {
+    console.warn('Unable to fetch YouTube metadata; using fallback metadata.', error.message);
+    return fallback;
+  }
+}
 
 function extractYouTubeVideoId(value) {
   if (typeof value !== 'string' || !value.trim()) return null;
