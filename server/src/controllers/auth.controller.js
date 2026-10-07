@@ -23,6 +23,25 @@ const cookieOptions = (maxAge, path) => ({
   path,
 });
 
+const clearAuthCookies = (response) => {
+  const cookiePaths = [
+    ['accessToken', '/'],
+    ['refreshToken', '/api/auth'],
+  ];
+
+  cookiePaths.forEach(([name, path]) => {
+    response.clearCookie(name, { domain: cookieDomain, path });
+    if (cookieDomain) {
+      response.clearCookie(name, { path });
+    }
+  });
+};
+
+const clearLegacyHostCookies = (response) => {
+  response.clearCookie('accessToken', { path: '/' });
+  response.clearCookie('refreshToken', { path: '/api/auth' });
+};
+
 const issueTokens = async (user) => {
   const accessToken = createAccessToken(user._id.toString());
   const refreshToken = createRefreshToken(user._id.toString());
@@ -34,6 +53,7 @@ const issueTokens = async (user) => {
 };
 
 const sendAuthResponse = (response, user, tokens) => {
+  clearLegacyHostCookies(response);
   response.cookie('accessToken', tokens.accessToken, cookieOptions(15 * 60 * 1000, '/'));
   response.cookie('refreshToken', tokens.refreshToken, cookieOptions(7 * 24 * 60 * 60 * 1000, '/api/auth'));
   response.status(200).json({
@@ -117,6 +137,9 @@ export const refresh = async (request, response, next) => {
       error.statusCode = 401;
       error.message = 'Refresh token is invalid or expired.';
     }
+    if (error.statusCode === 401) {
+      clearAuthCookies(response);
+    }
     next(error);
   }
 };
@@ -131,8 +154,7 @@ export const createExtensionCredential = (request, response) => {
 export const logout = async (request, response, next) => {
   try {
     await User.findByIdAndUpdate(request.user.id, { $unset: { refreshTokenHash: 1 } });
-    response.clearCookie('accessToken', { domain: cookieDomain, path: '/' });
-    response.clearCookie('refreshToken', { domain: cookieDomain, path: '/api/auth' });
+    clearAuthCookies(response);
     response.status(204).send();
   } catch (error) {
     next(error);
