@@ -8,6 +8,12 @@ const songSchema = new mongoose.Schema(
       required: [true, 'Song owner is required'],
       index: true,
     },
+    library: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Library',
+      required: [true, 'Song library is required'],
+      index: true,
+    },
     title: {
       type: String,
       required: [true, 'Song title is required'],
@@ -37,7 +43,7 @@ const songSchema = new mongoose.Schema(
   },
 );
 
-songSchema.index({ user: 1, youtubeVideoId: 1 }, { unique: true });
+songSchema.index({ user: 1, library: 1, youtubeVideoId: 1 }, { unique: true });
 
 const Song = mongoose.model('Song', songSchema);
 
