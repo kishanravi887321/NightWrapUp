@@ -9,3 +9,6 @@ client/dist/
 client/*.tsbuildinfo
 client/vite.config.d.ts
 client/vite.config.js
+
+
+.env
