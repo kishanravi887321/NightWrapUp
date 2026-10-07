@@ -1,5 +1,5 @@
 const API_URL = import.meta.env.PROD
-  ? '/api'
+  ? 'https://apinightwrapup.ziax.online/api'
   : 'http://localhost:5000/api';
 
 export type AuthUser = {
