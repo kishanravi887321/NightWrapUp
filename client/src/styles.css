@@ -612,6 +612,53 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.track-item > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.track-play {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  cursor: pointer;
+}
+
+.track-play.playing {
+  background: linear-gradient(135deg, #16a34a, #0d9488);
+}
+
+.track-details {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.track-details strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-details small {
+  color: #8b97b9;
+}
+
+.audio-player {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .track-item div {
   display: flex;
   align-items: center;

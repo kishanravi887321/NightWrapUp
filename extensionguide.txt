@@ -87,11 +87,9 @@ The frontend can read it later with:
   const extensionToken =
     localStorage.getItem("nightwrapup_extension_token");
 
-The extension must not use copy/paste. Browser storage is isolated by origin,
-so use a secure page-to-extension message bridge instead. The frontend sends
-the token with `window.postMessage` only to the extension content script, and
-the content script forwards it to the extension service worker with
-`chrome.runtime.sendMessage`.
+The extension content script runs directly on the frontend origin, so it reads
+the token from localStorage and copies it into chrome.storage.local. No
+postMessage bridge, connection handshake, or copy/paste is used.
 
 The frontend URL should be used as the extension's "Open NightWrapUp" link:
 
@@ -103,13 +101,18 @@ extension token from:
 
   localStorage.getItem("nightwrapup_extension_token")
 
-If the token exists, keep it available for the frontend's future extension
-related actions and validation. If it does not exist, the frontend should
-show that the extension connection is not configured and offer an automatic
-connection action.
+If the token exists, the extension content script synchronizes it into
+chrome.storage.local. If it does not exist, the extension removes its stored
+token.
 
 The frontend must not attempt to read the accessToken or refreshToken. Those
 remain httpOnly cookies and are managed by the browser.
+
+The production cookies use the shared domain `.ziax.online`, so they can be
+seen under both the frontend and API subdomains in browser developer tools.
+They use HttpOnly, Secure, and SameSite=None attributes, and frontend API
+requests must use credentials: "include". Local development leaves the cookie
+domain unset and creates host-only cookies.
 
 Extension JWT setup
 -------------------
@@ -121,10 +124,9 @@ The user signs in to the NightWrapUp web application with Google at:
 
   https://nightwrapup.ziax.online/
 
-When the user opens the production frontend, the frontend loads the extension
-token from browser localStorage after authentication. The frontend stores the
-current extension token for later actions and automatically offers it to the
-installed extension through the secure message bridge.
+When the user opens the production frontend, the extension content script
+loads the extension token from browser localStorage after authentication and
+stores it in chrome.storage.local.
 
 The extension setup flow is:
 
@@ -133,14 +135,18 @@ The extension setup flow is:
 3. Open https://nightwrapup.ziax.online/ in a new tab.
 4. The user signs in with Google.
 5. The frontend receives the extension JWT from the backend.
-6. The frontend stores the token in localStorage under:
+6. The content script directly reads
+   localStorage.getItem("nightwrapup_extension_token").
+7. The content script stores the value in chrome.storage.local under
+   "extensionToken".
+8. The extension loads libraries and can save the active YouTube video.
+
+The frontend stores the token in localStorage under:
 
      nightwrapup_extension_token
 
-7. The frontend sends the token to the extension using the secure bridge.
-8. The extension validates the message sender and stores the token in
-   chrome.storage.local.
-9. The extension uses that token for all future library and song API calls.
+The extension uses the stored token for all future library and song API calls.
+The content script also synchronizes login and logout changes automatically.
 
 Important:
 
@@ -357,77 +363,29 @@ Successful response:
 The endpoint is an upsert. Saving the same video in the same library updates
 the existing record rather than creating a duplicate.
 
-Automatic frontend-to-extension token bridge
----------------------------------------------
+Direct frontend-to-extension token synchronization
+---------------------------------------------------
 
-No user copy/paste is allowed. Use a message bridge between the production
-frontend and the extension.
-
-Frontend code on https://nightwrapup.ziax.online/:
-
-  window.postMessage(
-    {
-      source: "nightwrapup-web",
-      type: "NIGHTWRAPUP_EXTENSION_TOKEN",
-      token: localStorage.getItem("nightwrapup_extension_token")
-    },
-    "https://nightwrapup.ziax.online"
-  );
-
-Only send the message when the token exists and only to the exact production
-origin. Do not use "*" as the target origin.
+No user copy/paste is allowed. The extension content script runs directly on
+the production frontend origin and reads the token from localStorage.
 
 The extension content script must be configured to run on:
 
   https://nightwrapup.ziax.online/*
 
-Content script bridge:
+Direct content-script synchronization:
 
-  window.addEventListener("message", (event) => {
-    if (event.origin !== "https://nightwrapup.ziax.online") return;
-    if (event.source !== window) return;
-    if (event.data?.source !== "nightwrapup-web") return;
-    if (event.data?.type !== "NIGHTWRAPUP_EXTENSION_TOKEN") return;
-    if (typeof event.data.token !== "string" || !event.data.token) return;
+  const extensionToken =
+    localStorage.getItem("nightwrapup_extension_token");
 
-    chrome.runtime.sendMessage({
-      type: "STORE_EXTENSION_TOKEN",
-      token: event.data.token
-    });
-  });
+  if (extensionToken) {
+    chrome.storage.local.set({ extensionToken });
+  } else {
+    chrome.storage.local.remove("extensionToken");
+  }
 
-The extension service worker must validate the sender and store the token:
-
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (sender.origin !== "https://nightwrapup.ziax.online") {
-      sendResponse({ ok: false });
-      return;
-    }
-
-    if (message?.type !== "STORE_EXTENSION_TOKEN") {
-      sendResponse({ ok: false });
-      return;
-    }
-
-    chrome.storage.local.set(
-      { extensionToken: message.token },
-      () => sendResponse({ ok: !chrome.runtime.lastError })
-    );
-
-    return true;
-  });
-
-The exact sender/origin checks must be retained. Do not accept token messages
-from arbitrary websites or iframes.
-
-The extension can request the frontend to send the token by opening:
-
-  https://nightwrapup.ziax.online/?extension=connect
-
-On frontend load, after authentication/session restoration, detect the
-`extension=connect` query parameter and post the token through the bridge.
-The extension should then close the tab or show "Connected" after receiving a
-successful runtime response.
+The content script also listens for changes to this localStorage key and
+synchronizes login and logout changes automatically.
 
 Recommended extension popup flow
 --------------------------------
@@ -438,8 +396,8 @@ Recommended extension popup flow
 4. Read extensionToken from chrome.storage.local.
 5. If no token exists, show:
    "Open NightWrapUp to connect this extension."
-6. Open this connection URL:
-   https://nightwrapup.ziax.online/?extension=connect
+6. Open:
+   https://nightwrapup.ziax.online/
 7. Call GET /api/extension/libraries.
 8. Show a loading state while libraries are being fetched.
 9. Show a library selector.
@@ -447,6 +405,47 @@ Recommended extension popup flow
 11. Validate that it is a supported YouTube URL.
 12. Let the user click "Save to library".
 13. Call PUT /api/extension/libraries/:libraryId/songs.
+
+Library management from the extension
+-------------------------------------
+
+The extension popup also loads the authenticated user's libraries and includes
+a "Create library" form. New libraries are created through:
+
+POST https://apinightwrapup.ziax.online/api/extension/libraries
+
+The request uses the stored extension JWT and sends:
+
+{
+  "name": "Late night",
+  "description": "Optional description"
+}
+
+The save action does not use a right-click menu, long press, new tab, or
+separate window.
+
+Library selection and automatic save
+------------------------------------
+
+Clicking the NightWrapUp toolbar icon opens the compact extension popup. The
+popup loads the authenticated user's libraries, reads the stored
+`selectedLibraryId`, and shows the current selection. Changing the selector
+stores the new library ID in `chrome.storage.local` for future saves.
+
+Clicking the floating NightWrapUp robot on a supported YouTube or YouTube Music
+page sends the active URL to the background service worker. The worker reads
+the stored `selectedLibraryId` and saves the song to that library without
+opening a tab or window. If no library ID is stored, the worker rejects the
+save until a library is selected from the toolbar popup.
+
+Save feedback
+-------------
+
+While saving, the floating robot turns yellow. After a successful API response,
+it turns green and its tooltip says that the song was saved to the selected
+library. If the API request fails, it turns red and its tooltip contains the
+failure message. The toolbar icon also receives a green check badge on success
+or a red exclamation badge on failure.
 14. Show success or the backend error message.
 
 Floating YouTube icon
@@ -478,16 +477,15 @@ Recommended behavior:
 
   - The YouTube floating icon opens the extension save interface.
   - The save interface has an "Open NightWrapUp" button.
-  - The button opens https://nightwrapup.ziax.online/?extension=connect in a new tab.
+  - The button opens https://nightwrapup.ziax.online/ in a new tab.
   - The frontend handles Google sign-in and extension-token generation.
-  - The frontend automatically sends the token through the secure message
-    bridge.
-  - The extension stores the token locally and uses it for API validation and
-    library/song calls.
+  - The extension content script reads the token directly from the frontend
+    localStorage and stores it locally for API validation and library/song
+    calls.
 
-The extension must not directly read the frontend's localStorage. The browser
-isolates storage by origin. The secure postMessage/runtime messaging bridge is
-the automatic, no-copy/paste handoff.
+The extension content script is intentionally injected on the frontend origin,
+so it can read that origin's localStorage directly. The extension must never
+read website access or refresh cookies.
 
 Debugging guide
 ---------------
@@ -531,13 +529,18 @@ Test the same flow in all three browsers:
   3. Open the extension interface.
   4. Open https://nightwrapup.ziax.online/ if no token is configured.
   5. Sign in with Google.
-  6. Copy and store the extension token.
+  6. Reload the frontend tab so the content script synchronizes the token.
   7. Load libraries.
   8. Select a library.
   9. Save the active YouTube video.
   10. Confirm the saved song response.
 
-The production API must always be called over HTTPS:
+The browser frontend uses the same-origin production API path:
+
+  /api
+
+Vercel routes that path to the server service. The extension continues to use
+the direct HTTPS API URL:
 
   https://apinightwrapup.ziax.online/api
 
@@ -546,7 +549,7 @@ Error handling
 
 401:
   Extension token is missing, invalid, or expired.
-  Ask the user to copy a new extension token from the web app.
+  Ask the user to open the frontend, sign in again, and reload the tab.
 
 404:
   The selected library does not exist or does not belong to the user.

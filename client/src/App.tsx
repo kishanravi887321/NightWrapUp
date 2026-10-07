@@ -83,6 +83,7 @@ function App() {
   const [sessionError, setSessionError] = useState('');
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [songs, setSongs] = useState<Song[]>([]);
+  const [playingSongId, setPlayingSongId] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [libraryName, setLibraryName] = useState('');
@@ -144,6 +145,10 @@ function App() {
       .then(setSongs)
       .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Unable to load songs.'))
       .finally(() => setLoadingSongs(false));
+  }, [selectedId]);
+
+  useEffect(() => {
+    setPlayingSongId('');
   }, [selectedId]);
 
   const handleAuthenticated = (nextSession: AuthSession) => {
@@ -309,11 +314,27 @@ function App() {
                     <article key={song._id} className="track-item">
                       <div>
                         <span className="track-index">{String(index + 1).padStart(2, '0')}</span>
-                        <a href={song.youtubeUrl} target="_blank" rel="noreferrer">
+                        <button
+                          className={`track-play ${playingSongId === song._id ? 'playing' : ''}`}
+                          type="button"
+                          aria-label={playingSongId === song._id ? `Stop ${song.title}` : `Play ${song.title}`}
+                          onClick={() => setPlayingSongId((current) => current === song._id ? '' : song._id)}
+                        >
+                          {playingSongId === song._id ? '❚❚' : '▶'}
+                        </button>
+                        <div className="track-details">
                           <strong>{song.title}</strong>
                           <small>{song.channelName || song.youtubeVideoId}</small>
-                        </a>
+                        </div>
                       </div>
+                      {playingSongId === song._id && (
+                        <iframe
+                          className="audio-player"
+                          title={`Audio player for ${song.title}`}
+                          src={`https://www.youtube.com/embed/${encodeURIComponent(song.youtubeVideoId)}?autoplay=1&controls=0&disablekb=1&playsinline=1&rel=0`}
+                          allow="autoplay; encrypted-media"
+                        />
+                      )}
                     </article>
                   ))}
                 </div>
