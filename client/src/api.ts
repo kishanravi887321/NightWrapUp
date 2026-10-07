@@ -25,16 +25,10 @@ const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   return body.data as T;
 };
 
-export const register = (email: string, password: string) =>
-  request<AuthSession>('/auth/register', {
+export const googleAuth = (credential: string) =>
+  request<AuthSession>('/auth/google', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
-  });
-
-export const login = (email: string, password: string) =>
-  request<AuthSession>('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ credential }),
   });
 
 export const refresh = () => request<AuthSession>('/auth/refresh', { method: 'POST' });

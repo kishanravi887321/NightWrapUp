@@ -1,5 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { AuthSession, login, logout, refresh, register } from './api';
+import { useEffect, useMemo, useState } from 'react';
+import { GoogleLogin } from '@react-oauth/google';
+import { AuthSession, googleAuth, logout, refresh } from './api';
 
 type Playlist = {
   id: number;
@@ -52,20 +53,18 @@ const initialPlaylists: Playlist[] = [
 ];
 
 function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: AuthSession) => void }) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+  const handleGoogleSuccess = async (credential?: string) => {
+    if (!credential) {
+      setError('Google did not return a sign-in credential.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
-      const session =
-        mode === 'login' ? await login(email, password) : await register(email, password);
-      onAuthenticated(session);
+      onAuthenticated(await googleAuth(credential));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to authenticate.');
     } finally {
@@ -84,27 +83,23 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: AuthSessio
       </div>
       <section className="auth-card glass-card">
         <div className="auth-card-heading">
-          <span className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Start your archive'}</span>
-          <h2>{mode === 'login' ? 'Sign in to NightWrapUp' : 'Create your account'}</h2>
-          <p>{mode === 'login' ? 'Pick up exactly where you left off.' : 'A calm home for every song worth keeping.'}</p>
+          <span className="eyebrow">Welcome to your private listening space</span>
+          <h2>Sign in with Google</h2>
+          <p>New accounts are created automatically. Existing accounts are signed in instantly.</p>
         </div>
-        <form className="auth-form" onSubmit={submit}>
-          <label>
-            Email address
-            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
-          </label>
-          <label>
-            Password
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" minLength={8} required />
-          </label>
-          {error && <div className="form-error">{error}</div>}
-          <button className="primary-btn auth-submit" type="submit" disabled={busy}>
-            {busy ? 'Opening your space…' : mode === 'login' ? 'Enter my library' : 'Create my library'}
-          </button>
-        </form>
-        <button className="auth-switch" type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
-          {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
-        </button>
+        <div className="google-login">
+          <GoogleLogin
+            onSuccess={(credentialResponse) => handleGoogleSuccess(credentialResponse.credential)}
+            onError={() => setError('Google sign-in was cancelled or failed.')}
+            useOneTap
+            theme="filled_black"
+            shape="pill"
+            size="large"
+            width="320"
+          />
+        </div>
+        {busy && <div className="auth-status">Opening your space…</div>}
+        {error && <div className="form-error">{error}</div>}
       </section>
     </main>
   );
