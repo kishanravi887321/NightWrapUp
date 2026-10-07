@@ -70,3 +70,45 @@ export const createExtensionLibrary = async (request, response, next) => {
     next(error);
   }
 };
+
+export const deleteLibrarySong = async (request, response, next) => {
+  try {
+    const library = await Library.findOne({ _id: request.params.libraryId, user: request.user.id });
+    if (!library) {
+      const error = new Error('Library not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+    const song = await Song.findOneAndDelete({
+      _id: request.params.songId,
+      library: library._id,
+      user: request.user.id,
+    });
+    if (!song) {
+      const error = new Error('Song not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+    response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteLibrary = async (request, response, next) => {
+  try {
+    const library = await Library.findOneAndDelete({
+      _id: request.params.libraryId,
+      user: request.user.id,
+    });
+    if (!library) {
+      const error = new Error('Library not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+    await Song.deleteMany({ library: library._id, user: request.user.id });
+    response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};

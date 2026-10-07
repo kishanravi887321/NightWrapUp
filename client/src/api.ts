@@ -81,3 +81,11 @@ export const createLibrary = (name: string, description: string) =>
 
 export const listLibrarySongs = (libraryId: string) =>
   request<Song[]>(`/libraries/${encodeURIComponent(libraryId)}/songs`);
+
+export const deleteSong = (libraryId: string, songId: string) =>
+  request<void>(`/libraries/${encodeURIComponent(libraryId)}/songs/${encodeURIComponent(songId)}`, {
+    method: 'DELETE',
+  });
+
+export const deleteLibrary = (libraryId: string) =>
+  request<void>(`/libraries/${encodeURIComponent(libraryId)}`, { method: 'DELETE' });

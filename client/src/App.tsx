@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import {
   AuthSession,
@@ -6,6 +6,8 @@ import {
   Library,
   Song,
   createLibrary,
+  deleteLibrary,
+  deleteSong,
   googleAuth,
   listLibraries,
   listLibrarySongs,
@@ -73,6 +75,58 @@ function AuthScreen({
   );
 }
 
+type YouTubePlayerProps = {
+  videoId: string;
+  onEnded: () => void;
+};
+
+function YouTubePlayer({ videoId, onEnded }: YouTubePlayerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let player: { destroy: () => void } | undefined;
+    let cancelled = false;
+    const createPlayer = () => {
+      if (cancelled || !containerRef.current) return;
+      const youtube = (window as Window & {
+        YT?: { Player: new (element: HTMLDivElement, options: {
+          videoId: string;
+          playerVars: Record<string, number>;
+          events: { onStateChange: (event: { data: number }) => void };
+        }) => { destroy: () => void } };
+      }).YT;
+      if (!youtube) return;
+      player = new youtube.Player(containerRef.current, {
+        videoId,
+        playerVars: { autoplay: 1, controls: 0, playsinline: 1, rel: 0 },
+        events: { onStateChange: (event) => event.data === 0 && onEnded() },
+      });
+    };
+
+    const existingScript = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    if ((window as Window & { YT?: unknown }).YT) {
+      createPlayer();
+    } else {
+      const script = (existingScript as HTMLScriptElement | null) || document.createElement('script');
+      if (!existingScript) {
+        script.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(script);
+      }
+      const previousReady = (window as Window & { onYouTubeIframeAPIReady?: () => void }).onYouTubeIframeAPIReady;
+      (window as Window & { onYouTubeIframeAPIReady?: () => void }).onYouTubeIframeAPIReady = () => {
+        previousReady?.();
+        createPlayer();
+      };
+    }
+    return () => {
+      cancelled = true;
+      player?.destroy();
+    };
+  }, [videoId, onEnded]);
+
+  return <div ref={containerRef} className="audio-player" aria-hidden="true" />;
+}
+
 function App() {
   const [session, setSession] = useState<AuthSession | null>(() => {
     const saved = localStorage.getItem('nightwrapup_user');
@@ -84,6 +138,7 @@ function App() {
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [songs, setSongs] = useState<Song[]>([]);
   const [playingSongId, setPlayingSongId] = useState('');
+  const [playingIndex, setPlayingIndex] = useState(-1);
   const [selectedId, setSelectedId] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [libraryName, setLibraryName] = useState('');
@@ -149,7 +204,56 @@ function App() {
 
   useEffect(() => {
     setPlayingSongId('');
+    setPlayingIndex(-1);
   }, [selectedId]);
+
+  const selectedLibrary = libraries.find((library) => library._id === selectedId);
+
+  const playSong = (index: number) => {
+    setPlayingIndex(index);
+    setPlayingSongId(songs[index]?._id ?? '');
+  };
+
+  const playNextSong = () => {
+    if (playingIndex >= 0 && playingIndex + 1 < songs.length) {
+      playSong(playingIndex + 1);
+      return;
+    }
+    setPlayingSongId('');
+    setPlayingIndex(-1);
+  };
+
+  const handleDeleteSong = async (song: Song) => {
+    if (!selectedId || !window.confirm(`Delete "${song.title}"?`)) return;
+    try {
+      await deleteSong(selectedId, song._id);
+      setSongs((current) => current.filter((item) => item._id !== song._id));
+      setLibraries((current) => current.map((library) => library._id === selectedId
+        ? { ...library, songCount: Math.max(0, (library.songCount ?? 1) - 1) }
+        : library));
+      if (playingSongId === song._id) playNextSong();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to delete the song.');
+    }
+  };
+
+  const handleDeleteLibrary = async () => {
+    if (!selectedLibrary) return;
+    if (!window.confirm(`Are you sure you want to delete "${selectedLibrary.name}" and all its songs?`)) return;
+    const confirmation = window.prompt('Type "delete this library" to confirm.');
+    if (confirmation !== 'delete this library') {
+      setError('Library deletion cancelled. The confirmation text did not match.');
+      return;
+    }
+    try {
+      await deleteLibrary(selectedLibrary._id);
+      const remaining = libraries.filter((library) => library._id !== selectedLibrary._id);
+      setLibraries(remaining);
+      setSelectedId(remaining[0]?._id || '');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to delete the library.');
+    }
+  };
 
   const handleAuthenticated = (nextSession: AuthSession) => {
     localStorage.setItem('nightwrapup_user', JSON.stringify(nextSession.user));
@@ -183,7 +287,6 @@ function App() {
   if (checkingSession) return <div className="loading-screen">Tuning your night<span>•</span><span>•</span><span>•</span></div>;
   if (!session) return <div className="app-shell"><div className="bg-orb bg-orb-left" /><div className="bg-orb bg-orb-right" /><AuthScreen onAuthenticated={handleAuthenticated} sessionError={sessionError} /></div>;
 
-  const selectedLibrary = libraries.find((library) => library._id === selectedId);
   const totalTracks = libraries.reduce((sum, library) => sum + (library.songCount ?? 0), 0);
 
   return (
@@ -250,7 +353,11 @@ function App() {
                     className={`playlist-item ${isActive ? 'active' : ''}`}
                     onClick={() => setSelectedId(library._id)}
                   >
-                    <div className="playlist-badge from-fuchsia-500 to-violet-600" />
+                    {isActive && songs[0]?.thumbnail ? (
+                      <img className="playlist-badge" src={songs[0].thumbnail} alt="" />
+                    ) : (
+                      <div className="playlist-badge from-fuchsia-500 to-violet-600" />
+                    )}
                     <div className="playlist-meta">
                       <strong>{library.name}</strong>
                       <span>{library.description || 'Your personal listening space'}</span>
@@ -277,13 +384,17 @@ function App() {
                 <span className="eyebrow">Playlist details</span>
                 <h2>{selectedLibrary?.name ?? 'Select a library'}</h2>
               </div>
-              <span className="pill">{loadingSongs ? 'Loading…' : `${songs.length} songs`}</span>
+              <div className="editor-actions">
+                <span className="pill">{loadingSongs ? 'Loading…' : `${songs.length} songs`}</span>
+                {selectedLibrary && <button className="danger-btn" type="button" onClick={handleDeleteLibrary}>Delete library</button>}
+              </div>
             </div>
 
             {selectedLibrary ? (
               <>
                 <div className="editor-hero">
                   <div className="editor-art from-fuchsia-500 to-violet-600">
+                    {songs[0]?.thumbnail && <img src={songs[0].thumbnail} alt="" />}
                     <div className="art-disc">
                       <span />
                     </div>
@@ -318,7 +429,9 @@ function App() {
                           className={`track-play ${playingSongId === song._id ? 'playing' : ''}`}
                           type="button"
                           aria-label={playingSongId === song._id ? `Stop ${song.title}` : `Play ${song.title}`}
-                          onClick={() => setPlayingSongId((current) => current === song._id ? '' : song._id)}
+                          onClick={() => playingSongId === song._id
+                            ? setPlayingSongId('')
+                            : playSong(index)}
                         >
                           {playingSongId === song._id ? '❚❚' : '▶'}
                         </button>
@@ -328,13 +441,9 @@ function App() {
                         </div>
                       </div>
                       {playingSongId === song._id && (
-                        <iframe
-                          className="audio-player"
-                          title={`Audio player for ${song.title}`}
-                          src={`https://www.youtube.com/embed/${encodeURIComponent(song.youtubeVideoId)}?autoplay=1&controls=0&disablekb=1&playsinline=1&rel=0`}
-                          allow="autoplay; encrypted-media"
-                        />
+                        <YouTubePlayer videoId={song.youtubeVideoId} onEnded={playNextSong} />
                       )}
+                      <button className="track-delete" type="button" onClick={() => handleDeleteSong(song)} aria-label={`Delete ${song.title}`}>×</button>
                     </article>
                   ))}
                 </div>
