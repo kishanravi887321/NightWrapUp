@@ -1,4 +1,5 @@
 import Library from '../models/library.model.js';
+import Song from '../models/song.model.js';
 
 export const createLibrary = async (request, response, next) => {
   try {
@@ -11,8 +12,32 @@ export const createLibrary = async (request, response, next) => {
 
 export const listLibraries = async (request, response, next) => {
   try {
-    const libraries = await Library.find({ user: request.user.id }).sort({ createdAt: -1 });
+    const libraries = await Library.aggregate([
+      { $match: { user: request.user.id } },
+      { $lookup: { from: 'songs', localField: '_id', foreignField: 'library', as: 'songs' } },
+      { $addFields: { songCount: { $size: '$songs' } } },
+      { $project: { songs: 0 } },
+      { $sort: { createdAt: -1 } },
+    ]);
     response.json({ success: true, data: libraries });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listLibrarySongs = async (request, response, next) => {
+  try {
+    const library = await Library.findOne({ _id: request.params.libraryId, user: request.user.id });
+    if (!library) {
+      const error = new Error('Library not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const songs = await Song.find({ library: library._id, user: request.user.id })
+      .sort({ updatedAt: -1 })
+      .lean();
+    response.json({ success: true, data: songs });
   } catch (error) {
     next(error);
   }
