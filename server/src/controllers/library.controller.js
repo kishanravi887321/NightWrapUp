@@ -57,3 +57,16 @@ export const listExtensionLibraries = async (request, response, next) => {
     next(error);
   }
 };
+
+export const createExtensionLibrary = async (request, response, next) => {
+  try {
+    const library = await Library.create({
+      name: request.body.name,
+      description: request.body.description,
+      user: request.user.id,
+    });
+    response.status(201).json({ success: true, data: library });
+  } catch (error) {
+    next(error);
+  }
+};
