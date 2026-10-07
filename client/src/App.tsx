@@ -1,56 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
-import { AuthSession, googleAuth, logout, refresh } from './api';
-
-type Playlist = {
-  id: number;
-  name: string;
-  mood: string;
-  accent: string;
-  tracks: number;
-  duration: string;
-  updatedAt: string;
-  urls: string[];
-};
-
-const initialPlaylists: Playlist[] = [
-  {
-    id: 1,
-    name: 'Late Night Coding',
-    mood: 'Deep focus',
-    accent: 'from-fuchsia-500 to-violet-600',
-    tracks: 12,
-    duration: '58 min',
-    updatedAt: '2h ago',
-    urls: [
-      'https://music.youtube.com/watch?v=2vjPBrBU-TM',
-      'https://music.youtube.com/watch?v=4xDzrJKXOOY',
-    ],
-  },
-  {
-    id: 2,
-    name: 'Midnight Chill',
-    mood: 'Lo-fi calm',
-    accent: 'from-cyan-400 to-blue-600',
-    tracks: 18,
-    duration: '1h 12m',
-    updatedAt: 'Today',
-    urls: [
-      'https://music.youtube.com/watch?v=5qap5aO4i9A',
-      'https://music.youtube.com/watch?v=DWcJFNfaw9c',
-    ],
-  },
-  {
-    id: 3,
-    name: 'Weekend Reset',
-    mood: 'Warm and airy',
-    accent: 'from-amber-400 to-orange-500',
-    tracks: 9,
-    duration: '41 min',
-    updatedAt: 'Yesterday',
-    urls: ['https://music.youtube.com/watch?v=O7yq7c8NDgQ'],
-  },
-];
+import {
+  AuthSession,
+  Library,
+  Song,
+  createLibrary,
+  googleAuth,
+  listLibraries,
+  listLibrarySongs,
+  logout,
+  refresh,
+} from './api';
 
 function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: AuthSession) => void }) {
   const [busy, setBusy] = useState(false);
@@ -112,18 +72,24 @@ function App() {
     return saved ? { user: JSON.parse(saved), extensionToken: extensionToken ?? undefined } : null;
   });
   const [checkingSession, setCheckingSession] = useState(true);
-  const [playlists, setPlaylists] = useState(initialPlaylists);
-  const [selectedId, setSelectedId] = useState(initialPlaylists[0]?.id ?? 0);
+  const [libraries, setLibraries] = useState<Library[]>([]);
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [selectedId, setSelectedId] = useState('');
   const [newUrl, setNewUrl] = useState('');
+  const [libraryName, setLibraryName] = useState('');
+  const [libraryDescription, setLibraryDescription] = useState('');
+  const [loadingLibraries, setLoadingLibraries] = useState(false);
+  const [loadingSongs, setLoadingSongs] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const restoreSession = async () => {
-      if (!session) {
-        setCheckingSession(false);
-        return;
-      }
       try {
         const renewed = await refresh();
+        localStorage.setItem('nightwrapup_user', JSON.stringify(renewed.user));
+        if (renewed.extensionToken) {
+          localStorage.setItem('nightwrapup_extension_token', renewed.extensionToken);
+        }
         setSession(renewed);
       } catch {
         localStorage.removeItem('nightwrapup_user');
@@ -135,6 +101,30 @@ function App() {
     };
     restoreSession();
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    setLoadingLibraries(true);
+    listLibraries()
+      .then((nextLibraries) => {
+        setLibraries(nextLibraries);
+        setSelectedId((current) => current || nextLibraries[0]?._id || '');
+      })
+      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Unable to load libraries.'))
+      .finally(() => setLoadingLibraries(false));
+  }, [session]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setSongs([]);
+      return;
+    }
+    setLoadingSongs(true);
+    listLibrarySongs(selectedId)
+      .then(setSongs)
+      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Unable to load songs.'))
+      .finally(() => setLoadingSongs(false));
+  }, [selectedId]);
 
   const handleAuthenticated = (nextSession: AuthSession) => {
     localStorage.setItem('nightwrapup_user', JSON.stringify(nextSession.user));
@@ -151,47 +141,25 @@ function App() {
     setSession(null);
   };
 
+  const handleCreateLibrary = async () => {
+    const name = libraryName.trim();
+    if (!name) return;
+    try {
+      const library = await createLibrary(name, libraryDescription.trim());
+      setLibraries((current) => [library, ...current]);
+      setSelectedId(library._id);
+      setLibraryName('');
+      setLibraryDescription('');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to create library.');
+    }
+  };
+
   if (checkingSession) return <div className="loading-screen">Tuning your night<span>•</span><span>•</span><span>•</span></div>;
   if (!session) return <div className="app-shell"><div className="bg-orb bg-orb-left" /><div className="bg-orb bg-orb-right" /><AuthScreen onAuthenticated={handleAuthenticated} /></div>;
 
-  const selectedPlaylist = useMemo(
-    () => playlists.find((playlist) => playlist.id === selectedId) ?? playlists[0],
-    [playlists, selectedId],
-  );
-
-  const totalTracks = playlists.reduce((sum, playlist) => sum + playlist.tracks, 0);
-  const totalUrls = playlists.reduce((sum, playlist) => sum + playlist.urls.length, 0);
-
-  const handleAddUrl = () => {
-    const url = newUrl.trim();
-    if (!url || !selectedPlaylist) {
-      return;
-    }
-
-    setPlaylists((current) =>
-      current.map((playlist) =>
-        playlist.id === selectedPlaylist.id
-          ? { ...playlist, urls: [url, ...playlist.urls], tracks: playlist.tracks + 1, updatedAt: 'Just now' }
-          : playlist,
-      ),
-    );
-    setNewUrl('');
-  };
-
-  const handleRemoveUrl = (playlistId: number, urlIndex: number) => {
-    setPlaylists((current) =>
-      current.map((playlist) =>
-        playlist.id === playlistId
-          ? {
-              ...playlist,
-              urls: playlist.urls.filter((_, index) => index !== urlIndex),
-              tracks: Math.max(0, playlist.tracks - 1),
-              updatedAt: 'Just now',
-            }
-          : playlist,
-      ),
-    );
-  };
+  const selectedLibrary = libraries.find((library) => library._id === selectedId);
+  const totalTracks = libraries.reduce((sum, library) => sum + (library.songCount ?? 0), 0);
 
   return (
     <div className="app-shell">
@@ -199,6 +167,12 @@ function App() {
       <div className="bg-orb bg-orb-right" />
 
       <main className="app">
+        {error && (
+          <div className="app-alert" role="alert">
+            <span>{error}</span>
+            <button type="button" onClick={() => setError('')}>Dismiss</button>
+          </div>
+        )}
         <section className="hero glass-card">
           <div className="hero-copy">
             <span className="eyebrow">NightWrapUp / Playlist Studio</span>
@@ -209,12 +183,6 @@ function App() {
             </p>
 
             <div className="hero-actions">
-              <button className="primary-btn" type="button">
-                Open playlist editor
-              </button>
-              <button className="secondary-btn" type="button">
-                Sync-ready layout
-              </button>
               <button className="ghost-btn user-menu" type="button" onClick={handleLogout}>
                 {session.user.email} · Log out
               </button>
@@ -224,15 +192,15 @@ function App() {
           <div className="hero-stats">
             <article className="stat-card">
               <span>Total playlists</span>
-              <strong>{playlists.length}</strong>
+              <strong>{libraries.length}</strong>
             </article>
             <article className="stat-card">
               <span>Saved URLs</span>
-              <strong>{totalUrls}</strong>
+              <strong>{totalTracks}</strong>
             </article>
             <article className="stat-card">
               <span>Tracks tracked</span>
-              <strong>{totalTracks}</strong>
+              <strong>{songs.length}</strong>
             </article>
           </div>
         </section>
@@ -244,41 +212,37 @@ function App() {
                 <span className="eyebrow">Your playlists</span>
                 <h2>Library</h2>
               </div>
-              <span className="pill">{playlists.length} items</span>
+              <span className="pill">{libraries.length} libraries</span>
             </div>
 
             <div className="playlist-list">
-              {playlists.map((playlist) => {
-                const isActive = playlist.id === selectedId;
+              {libraries.map((library) => {
+                const isActive = library._id === selectedId;
                 return (
                   <button
-                    key={playlist.id}
+                    key={library._id}
                     type="button"
                     className={`playlist-item ${isActive ? 'active' : ''}`}
-                    onClick={() => setSelectedId(playlist.id)}
+                    onClick={() => setSelectedId(library._id)}
                   >
-                    <div className={`playlist-badge ${playlist.accent}`} />
+                    <div className="playlist-badge from-fuchsia-500 to-violet-600" />
                     <div className="playlist-meta">
-                      <strong>{playlist.name}</strong>
-                      <span>
-                        {playlist.mood} • {playlist.updatedAt}
-                      </span>
+                      <strong>{library.name}</strong>
+                      <span>{library.description || 'Your personal listening space'}</span>
                     </div>
                     <div className="playlist-count">
-                      <span>{playlist.urls.length}</span>
-                      <small>links</small>
+                      <span>{library.songCount ?? 0}</span>
+                      <small>songs</small>
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            <div className="note-card">
-              <span className="note-label">Database ready</span>
-              <p>
-                This UI is set up for your future DB save flow. Hook the add/remove actions to
-                your API later without redesigning the screen.
-              </p>
+            <div className="library-create">
+              <input value={libraryName} onChange={(event) => setLibraryName(event.target.value)} placeholder="New library name" maxLength={80} />
+              <input value={libraryDescription} onChange={(event) => setLibraryDescription(event.target.value)} placeholder="Short mood or description" maxLength={240} />
+              <button className="primary-btn" type="button" onClick={handleCreateLibrary}>Create library</button>
             </div>
           </aside>
 
@@ -286,27 +250,26 @@ function App() {
             <div className="section-heading">
               <div>
                 <span className="eyebrow">Playlist details</span>
-                <h2>{selectedPlaylist?.name ?? 'Select a playlist'}</h2>
+                <h2>{selectedLibrary?.name ?? 'Select a library'}</h2>
               </div>
-              <span className="pill">{selectedPlaylist?.duration ?? '0 min'}</span>
+              <span className="pill">{loadingSongs ? 'Loading…' : `${songs.length} songs`}</span>
             </div>
 
-            {selectedPlaylist ? (
+            {selectedLibrary ? (
               <>
                 <div className="editor-hero">
-                  <div className={`editor-art ${selectedPlaylist.accent}`}>
+                  <div className="editor-art from-fuchsia-500 to-violet-600">
                     <div className="art-disc">
                       <span />
                     </div>
                   </div>
 
                   <div className="editor-copy">
-                    <p className="editor-mood">{selectedPlaylist.mood}</p>
-                    <h3>{selectedPlaylist.tracks} tracks on deck</h3>
+                    <p className="editor-mood">Library • {selectedLibrary.description || 'Late-night listening'}</p>
+                    <h3>{songs.length} songs in this library</h3>
                     <p>
-                      Drop in the YouTube Music URL you want to keep for this playlist. The
-                      interface is intentionally spacious and futuristic so the product feels
-                      premium from day one.
+                      Your extension saves YouTube songs directly into this library. Add a URL here
+                      for a quick web-based save.
                     </p>
 
                     <div className="url-form">
@@ -314,39 +277,31 @@ function App() {
                         type="url"
                         value={newUrl}
                         onChange={(event) => setNewUrl(event.target.value)}
-                        placeholder="Paste a YouTube Music URL here"
+                        placeholder="Paste a YouTube URL here"
                       />
-                      <button type="button" onClick={handleAddUrl}>
-                        Add link
-                      </button>
+                      <button type="button" onClick={() => setError('Use the extension floating button to save songs.')}>Add link</button>
                     </div>
                   </div>
                 </div>
 
                 <div className="track-list">
-                  {selectedPlaylist.urls.map((url, index) => (
-                    <article key={`${url}-${index}`} className="track-item">
+                  {songs.map((song, index) => (
+                    <article key={song._id} className="track-item">
                       <div>
                         <span className="track-index">{String(index + 1).padStart(2, '0')}</span>
-                        <a href={url} target="_blank" rel="noreferrer">
-                          {url}
+                        <a href={song.youtubeUrl} target="_blank" rel="noreferrer">
+                          <strong>{song.title}</strong>
+                          <small>{song.channelName || song.youtubeVideoId}</small>
                         </a>
                       </div>
-                      <button
-                        type="button"
-                        className="ghost-btn"
-                        onClick={() => handleRemoveUrl(selectedPlaylist.id, index)}
-                      >
-                        Remove
-                      </button>
                     </article>
                   ))}
                 </div>
               </>
             ) : (
               <div className="empty-state">
-                <h3>No playlist selected</h3>
-                <p>Pick a playlist from the sidebar to start adding URLs.</p>
+                <h3>{loadingLibraries ? 'Loading your libraries…' : 'Create your first library'}</h3>
+                <p>Your libraries are synced with MongoDB and available to the extension.</p>
               </div>
             )}
           </section>
