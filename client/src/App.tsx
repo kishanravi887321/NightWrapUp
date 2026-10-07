@@ -3,6 +3,8 @@ import { GoogleLogin } from '@react-oauth/google';
 import { AuthSession, googleAuth, logout, refresh } from './api';
 
 const EXTENSION_BRIDGE_ORIGIN = 'https://nightwrapup.ziax.online';
+const EXTENSION_TOKEN_MESSAGE = 'NIGHTWRAPUP_EXTENSION_TOKEN';
+const EXTENSION_READY_MESSAGE = 'NIGHTWRAPUP_EXTENSION_READY';
 
 type Playlist = {
   id: number;
@@ -143,23 +145,41 @@ function App() {
       window.location.origin === EXTENSION_BRIDGE_ORIGIN &&
       new URLSearchParams(window.location.search).get('extension') === 'connect';
 
-    if (checkingSession || !session || !isConnectionRequest) {
+    if (!isConnectionRequest) {
       return;
     }
 
-    const extensionToken = localStorage.getItem('nightwrapup_extension_token');
-    if (!extensionToken) {
-      return;
-    }
+    const sendExtensionToken = () => {
+      if (checkingSession || !session) return;
 
-    window.postMessage(
-      {
-        source: 'nightwrapup-web',
-        type: 'NIGHTWRAPUP_EXTENSION_TOKEN',
-        token: extensionToken,
-      },
-      EXTENSION_BRIDGE_ORIGIN,
-    );
+      const extensionToken = localStorage.getItem('nightwrapup_extension_token');
+      if (!extensionToken) return;
+
+      window.postMessage(
+        {
+          source: 'nightwrapup-web',
+          type: EXTENSION_TOKEN_MESSAGE,
+          token: extensionToken,
+        },
+        EXTENSION_BRIDGE_ORIGIN,
+      );
+    };
+
+    const handleExtensionReady = (event: MessageEvent) => {
+      if (
+        event.origin === EXTENSION_BRIDGE_ORIGIN &&
+        event.source === window &&
+        event.data?.source === 'nightwrapup-extension' &&
+        event.data?.type === EXTENSION_READY_MESSAGE
+      ) {
+        sendExtensionToken();
+      }
+    };
+
+    window.addEventListener('message', handleExtensionReady);
+    sendExtensionToken();
+
+    return () => window.removeEventListener('message', handleExtensionReady);
   }, [checkingSession, session]);
 
   const handleAuthenticated = (nextSession: AuthSession) => {

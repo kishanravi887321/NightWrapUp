@@ -12,11 +12,13 @@ import {
 const googleClient = new OAuth2Client(env.googleClientId);
 
 const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+const cookieDomain = isProduction ? '.ziax.online' : undefined;
 
 const cookieOptions = (maxAge, path) => ({
   httpOnly: true,
   secure: isProduction,
   sameSite: isProduction ? 'none' : 'lax',
+  domain: cookieDomain,
   maxAge,
   path,
 });
@@ -129,8 +131,8 @@ export const createExtensionCredential = (request, response) => {
 export const logout = async (request, response, next) => {
   try {
     await User.findByIdAndUpdate(request.user.id, { $unset: { refreshTokenHash: 1 } });
-    response.clearCookie('accessToken', { path: '/' });
-    response.clearCookie('refreshToken', { path: '/api/auth' });
+    response.clearCookie('accessToken', { domain: cookieDomain, path: '/' });
+    response.clearCookie('refreshToken', { domain: cookieDomain, path: '/api/auth' });
     response.status(204).send();
   } catch (error) {
     next(error);
