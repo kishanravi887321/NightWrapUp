@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { AuthSession, login, logout, refresh, register } from './api';
 
 type Playlist = {
   id: number;
@@ -50,10 +51,122 @@ const initialPlaylists: Playlist[] = [
   },
 ];
 
+function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: AuthSession) => void }) {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const session =
+        mode === 'login' ? await login(email, password) : await register(email, password);
+      onAuthenticated(session);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to authenticate.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="auth-layout">
+      <div className="auth-showcase">
+        <span className="brand-mark">NW</span>
+        <span className="eyebrow">NightWrapUp / private listening space</span>
+        <h1>Your late-night soundtrack, beautifully organized.</h1>
+        <p>Save the songs that find you after dark and keep your personal library in sync.</p>
+        <div className="auth-proof"><span>✦</span> Your library. Your flow. Your night.</div>
+      </div>
+      <section className="auth-card glass-card">
+        <div className="auth-card-heading">
+          <span className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Start your archive'}</span>
+          <h2>{mode === 'login' ? 'Sign in to NightWrapUp' : 'Create your account'}</h2>
+          <p>{mode === 'login' ? 'Pick up exactly where you left off.' : 'A calm home for every song worth keeping.'}</p>
+        </div>
+        <form className="auth-form" onSubmit={submit}>
+          <label>
+            Email address
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
+          </label>
+          <label>
+            Password
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" minLength={8} required />
+          </label>
+          {error && <div className="form-error">{error}</div>}
+          <button className="primary-btn auth-submit" type="submit" disabled={busy}>
+            {busy ? 'Opening your space…' : mode === 'login' ? 'Enter my library' : 'Create my library'}
+          </button>
+        </form>
+        <button className="auth-switch" type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
+          {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
+        </button>
+      </section>
+    </main>
+  );
+}
+
 function App() {
+  const [session, setSession] = useState<AuthSession | null>(() => {
+    const saved = localStorage.getItem('nightwrapup_user');
+    const extensionToken = localStorage.getItem('nightwrapup_extension_token');
+    return saved ? { user: JSON.parse(saved), extensionToken: extensionToken ?? undefined } : null;
+  });
+  const [checkingSession, setCheckingSession] = useState(true);
   const [playlists, setPlaylists] = useState(initialPlaylists);
   const [selectedId, setSelectedId] = useState(initialPlaylists[0]?.id ?? 0);
   const [newUrl, setNewUrl] = useState('');
+  const [tokenCopied, setTokenCopied] = useState(false);
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      if (!session) {
+        setCheckingSession(false);
+        return;
+      }
+      try {
+        const renewed = await refresh();
+        setSession(renewed);
+      } catch {
+        localStorage.removeItem('nightwrapup_user');
+        localStorage.removeItem('nightwrapup_extension_token');
+        setSession(null);
+      } finally {
+        setCheckingSession(false);
+      }
+    };
+    restoreSession();
+  }, []);
+
+  const handleAuthenticated = (nextSession: AuthSession) => {
+    localStorage.setItem('nightwrapup_user', JSON.stringify(nextSession.user));
+    if (nextSession.extensionToken) {
+      localStorage.setItem('nightwrapup_extension_token', nextSession.extensionToken);
+    }
+    setSession(nextSession);
+  };
+
+  const handleLogout = async () => {
+    await logout().catch(() => undefined);
+    localStorage.removeItem('nightwrapup_user');
+    localStorage.removeItem('nightwrapup_extension_token');
+    setSession(null);
+  };
+
+  const handleCopyExtensionToken = async () => {
+    const extensionToken = session?.extensionToken;
+    if (!extensionToken) return;
+    await navigator.clipboard.writeText(extensionToken);
+    setTokenCopied(true);
+    window.setTimeout(() => setTokenCopied(false), 1800);
+  };
+
+  if (checkingSession) return <div className="loading-screen">Tuning your night<span>•</span><span>•</span><span>•</span></div>;
+  if (!session) return <div className="app-shell"><div className="bg-orb bg-orb-left" /><div className="bg-orb bg-orb-right" /><AuthScreen onAuthenticated={handleAuthenticated} /></div>;
 
   const selectedPlaylist = useMemo(
     () => playlists.find((playlist) => playlist.id === selectedId) ?? playlists[0],
@@ -115,6 +228,12 @@ function App() {
               </button>
               <button className="secondary-btn" type="button">
                 Sync-ready layout
+              </button>
+              <button className="ghost-btn user-menu" type="button" onClick={handleLogout}>
+                {session.user.email} · Log out
+              </button>
+              <button className="ghost-btn" type="button" onClick={handleCopyExtensionToken}>
+                {tokenCopied ? 'Extension token copied' : 'Copy extension token'}
               </button>
             </div>
           </div>
