@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import {
   AuthSession,
+  ApiError,
   Library,
   Song,
   createLibrary,
@@ -12,7 +13,13 @@ import {
   refresh,
 } from './api';
 
-function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: AuthSession) => void }) {
+function AuthScreen({
+  onAuthenticated,
+  sessionError,
+}: {
+  onAuthenticated: (session: AuthSession) => void;
+  sessionError?: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -59,6 +66,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: AuthSessio
           />
         </div>
         {busy && <div className="auth-status">Opening your space…</div>}
+        {sessionError && <div className="form-error">{sessionError}</div>}
         {error && <div className="form-error">{error}</div>}
       </section>
     </main>
@@ -72,6 +80,7 @@ function App() {
     return saved ? { user: JSON.parse(saved), extensionToken: extensionToken ?? undefined } : null;
   });
   const [checkingSession, setCheckingSession] = useState(true);
+  const [sessionError, setSessionError] = useState('');
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [songs, setSongs] = useState<Song[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -86,15 +95,26 @@ function App() {
     const restoreSession = async () => {
       try {
         const renewed = await refresh();
+        setSessionError('');
         localStorage.setItem('nightwrapup_user', JSON.stringify(renewed.user));
         if (renewed.extensionToken) {
           localStorage.setItem('nightwrapup_extension_token', renewed.extensionToken);
         }
         setSession(renewed);
-      } catch {
-        localStorage.removeItem('nightwrapup_user');
-        localStorage.removeItem('nightwrapup_extension_token');
-        setSession(null);
+      } catch (requestError) {
+        if (requestError instanceof ApiError && requestError.status === 401) {
+          localStorage.removeItem('nightwrapup_user');
+          localStorage.removeItem('nightwrapup_extension_token');
+          setSession(null);
+          setSessionError('Your sign-in session expired. Please sign in again.');
+        } else {
+          console.error('Unable to restore the sign-in session.', requestError);
+          setSessionError(
+            requestError instanceof Error
+              ? `Unable to restore your session: ${requestError.message}`
+              : 'Unable to restore your session. Please try again.',
+          );
+        }
       } finally {
         setCheckingSession(false);
       }
@@ -156,7 +176,7 @@ function App() {
   };
 
   if (checkingSession) return <div className="loading-screen">Tuning your night<span>•</span><span>•</span><span>•</span></div>;
-  if (!session) return <div className="app-shell"><div className="bg-orb bg-orb-left" /><div className="bg-orb bg-orb-right" /><AuthScreen onAuthenticated={handleAuthenticated} /></div>;
+  if (!session) return <div className="app-shell"><div className="bg-orb bg-orb-left" /><div className="bg-orb bg-orb-right" /><AuthScreen onAuthenticated={handleAuthenticated} sessionError={sessionError} /></div>;
 
   const selectedLibrary = libraries.find((library) => library._id === selectedId);
   const totalTracks = libraries.reduce((sum, library) => sum + (library.songCount ?? 0), 0);

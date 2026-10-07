@@ -2,6 +2,16 @@ const API_URL = import.meta.env.PROD
   ? 'https://apinightwrapup.ziax.online/api'
   : 'http://localhost:5000/api';
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -43,7 +53,7 @@ const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body.message ?? 'Something went wrong. Please try again.');
+    throw new ApiError(body.message ?? 'Something went wrong. Please try again.', response.status);
   }
   return body.data as T;
 };
