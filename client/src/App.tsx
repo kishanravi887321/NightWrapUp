@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import { AuthSession, googleAuth, logout, refresh } from './api';
 
+const EXTENSION_BRIDGE_ORIGIN = 'https://nightwrapup.ziax.online';
+
 type Playlist = {
   id: number;
   name: string;
@@ -115,7 +117,6 @@ function App() {
   const [playlists, setPlaylists] = useState(initialPlaylists);
   const [selectedId, setSelectedId] = useState(initialPlaylists[0]?.id ?? 0);
   const [newUrl, setNewUrl] = useState('');
-  const [tokenCopied, setTokenCopied] = useState(false);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -137,6 +138,30 @@ function App() {
     restoreSession();
   }, []);
 
+  useEffect(() => {
+    const isConnectionRequest =
+      window.location.origin === EXTENSION_BRIDGE_ORIGIN &&
+      new URLSearchParams(window.location.search).get('extension') === 'connect';
+
+    if (checkingSession || !session || !isConnectionRequest) {
+      return;
+    }
+
+    const extensionToken = localStorage.getItem('nightwrapup_extension_token');
+    if (!extensionToken) {
+      return;
+    }
+
+    window.postMessage(
+      {
+        source: 'nightwrapup-web',
+        type: 'NIGHTWRAPUP_EXTENSION_TOKEN',
+        token: extensionToken,
+      },
+      EXTENSION_BRIDGE_ORIGIN,
+    );
+  }, [checkingSession, session]);
+
   const handleAuthenticated = (nextSession: AuthSession) => {
     localStorage.setItem('nightwrapup_user', JSON.stringify(nextSession.user));
     if (nextSession.extensionToken) {
@@ -150,14 +175,6 @@ function App() {
     localStorage.removeItem('nightwrapup_user');
     localStorage.removeItem('nightwrapup_extension_token');
     setSession(null);
-  };
-
-  const handleCopyExtensionToken = async () => {
-    const extensionToken = session?.extensionToken;
-    if (!extensionToken) return;
-    await navigator.clipboard.writeText(extensionToken);
-    setTokenCopied(true);
-    window.setTimeout(() => setTokenCopied(false), 1800);
   };
 
   if (checkingSession) return <div className="loading-screen">Tuning your night<span>•</span><span>•</span><span>•</span></div>;
@@ -226,9 +243,6 @@ function App() {
               </button>
               <button className="ghost-btn user-menu" type="button" onClick={handleLogout}>
                 {session.user.email} · Log out
-              </button>
-              <button className="ghost-btn" type="button" onClick={handleCopyExtensionToken}>
-                {tokenCopied ? 'Extension token copied' : 'Copy extension token'}
               </button>
             </div>
           </div>
