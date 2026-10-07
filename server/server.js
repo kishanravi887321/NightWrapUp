@@ -7,10 +7,8 @@ const startServer = async () => {
   try {
     await connectDatabase();
 
-    const PORT =  3000;
-
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+    app.listen(env.port, () => {
+      console.log(`Server running on http://localhost:${env.port}`);
     });
   } catch (error) {
     console.error('Server startup failed:', error.message);
