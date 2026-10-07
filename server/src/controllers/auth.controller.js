@@ -11,10 +11,12 @@ import {
 
 const googleClient = new OAuth2Client(env.googleClientId);
 
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+
 const cookieOptions = (maxAge, path) => ({
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
+  secure: isProduction,
+  sameSite: isProduction ? 'none' : 'lax',
   maxAge,
   path,
 });
