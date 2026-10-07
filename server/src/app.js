@@ -8,8 +8,18 @@ import extensionRoutes from './routes/extension.routes.js';
 import errorHandler from './middlewares/error-handler.js';
 import notFound from './middlewares/not-found.js';
 import env from './config/env.js';
+import connectDatabase from './db/connect.js';
 
 const app = express();
+
+app.use(async (_request, _response, next) => {
+  try {
+    await connectDatabase();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.use(
   cors({

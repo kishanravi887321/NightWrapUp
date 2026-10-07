@@ -1,4 +1,7 @@
-const API_URL = import.meta.env.VITE_API_URL ?? '/api';
+const API_ORIGIN = import.meta.env.PROD
+  ? 'https://apinightwrapup.ziax.online'
+  : 'http://localhost:5000';
+const API_URL = `${API_ORIGIN.replace(/\/$/, '')}/api`;
 
 export type AuthUser = {
   id: string;
