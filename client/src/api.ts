@@ -15,6 +15,27 @@ export type AuthSession = {
   extensionToken?: string;
 };
 
+export type Library = {
+  _id: string;
+  name: string;
+  description?: string;
+  songCount?: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Song = {
+  _id: string;
+  library: string;
+  title: string;
+  youtubeUrl: string;
+  youtubeVideoId: string;
+  thumbnail?: string;
+  channelName?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   const response = await fetch(`${API_URL}${path}`, {
     credentials: 'include',
@@ -40,3 +61,14 @@ export const logout = () => request<void>('/auth/logout', { method: 'POST' });
 
 export const createExtensionToken = () =>
   request<{ extensionToken: string }>('/auth/extension-token', { method: 'POST' });
+
+export const listLibraries = () => request<Library[]>('/libraries');
+
+export const createLibrary = (name: string, description: string) =>
+  request<Library>('/libraries', {
+    method: 'POST',
+    body: JSON.stringify({ name, description }),
+  });
+
+export const listLibrarySongs = (libraryId: string) =>
+  request<Song[]>(`/libraries/${encodeURIComponent(libraryId)}/songs`);
