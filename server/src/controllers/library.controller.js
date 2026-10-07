@@ -1,5 +1,6 @@
 import Library from '../models/library.model.js';
 import Song from '../models/song.model.js';
+import mongoose from 'mongoose';
 
 export const createLibrary = async (request, response, next) => {
   try {
@@ -12,8 +13,9 @@ export const createLibrary = async (request, response, next) => {
 
 export const listLibraries = async (request, response, next) => {
   try {
+    const userId = new mongoose.Types.ObjectId(request.user.id);
     const libraries = await Library.aggregate([
-      { $match: { user: request.user.id } },
+      { $match: { user: userId } },
       { $lookup: { from: 'songs', localField: '_id', foreignField: 'library', as: 'songs' } },
       { $addFields: { songCount: { $size: '$songs' } } },
       { $project: { songs: 0 } },
