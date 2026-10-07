@@ -1,8 +1,4 @@
-import crypto from 'node:crypto';
-import { promisify } from 'node:util';
 import mongoose from 'mongoose';
-
-const scrypt = promisify(crypto.scrypt);
 
 const userSchema = new mongoose.Schema(
   {
@@ -15,15 +11,20 @@ const userSchema = new mongoose.Schema(
       index: true,
       match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address'],
     },
-    password: {
+    googleId: {
       type: String,
-      required: [true, 'Password is required'],
-      minlength: [8, 'Password must be at least 8 characters'],
-      select: false,
+      required: [true, 'Google account ID is required'],
+      unique: true,
+      index: true,
     },
-    extensionTokenHash: {
+    name: {
       type: String,
-      select: false,
+      trim: true,
+      maxlength: 120,
+    },
+    avatarUrl: {
+      type: String,
+      trim: true,
     },
     refreshTokenHash: {
       type: String,
@@ -35,25 +36,13 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-userSchema.pre('save', async function hashPassword(next) {
-  if (!this.isModified('password')) {
-    next();
-    return;
-  }
-
-  const salt = crypto.randomBytes(16).toString('hex');
-  const derivedKey = await scrypt(this.password, salt, 64);
-  this.password = `${salt}:${derivedKey.toString('hex')}`;
-  next();
-});
-
-userSchema.methods.comparePassword = async function comparePassword(candidate) {
-  const [salt, storedKey] = this.password.split(':');
-  const derivedKey = await scrypt(candidate, salt, 64);
-  return crypto.timingSafeEqual(
-    Buffer.from(storedKey, 'hex'),
-    derivedKey,
-  );
+userSchema.methods.toSafeJSON = function toSafeJSON() {
+  return {
+    id: this._id.toString(),
+    email: this.email,
+    createdAt: this.createdAt,
+    updatedAt: this.updatedAt,
+  };
 };
 
 const User = mongoose.model('User', userSchema);
