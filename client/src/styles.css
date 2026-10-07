@@ -1,0 +1,483 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background:
+    radial-gradient(circle at top, rgba(118, 99, 255, 0.18), transparent 28%),
+    radial-gradient(circle at 80% 20%, rgba(56, 189, 248, 0.16), transparent 22%),
+    #070b15;
+  color: #f5f7ff;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  padding: 32px;
+  overflow: hidden;
+}
+
+.app {
+  position: relative;
+  z-index: 1;
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 24px;
+}
+
+.bg-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(80px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.bg-orb-left {
+  top: -80px;
+  left: -40px;
+  width: 220px;
+  height: 220px;
+  background: rgba(139, 92, 246, 0.42);
+}
+
+.bg-orb-right {
+  right: -70px;
+  top: 130px;
+  width: 280px;
+  height: 280px;
+  background: rgba(14, 165, 233, 0.28);
+}
+
+.glass-card {
+  background: rgba(12, 17, 33, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(18px);
+  border-radius: 28px;
+}
+
+.hero {
+  padding: 32px;
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.hero-copy h1,
+.section-heading h2,
+.editor-copy h3 {
+  margin: 0;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #9ca8c7;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+}
+
+.hero-copy h1 {
+  margin-top: 14px;
+  max-width: 12ch;
+  font-size: clamp(2.8rem, 6vw, 5.25rem);
+  line-height: 0.95;
+}
+
+.hero-copy p {
+  max-width: 60ch;
+  margin: 18px 0 0;
+  color: #afbad6;
+  font-size: 1.02rem;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.primary-btn,
+.secondary-btn,
+.ghost-btn,
+.url-form button {
+  border-radius: 999px;
+  padding: 12px 18px;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.primary-btn,
+.url-form button {
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.32);
+}
+
+.secondary-btn,
+.ghost-btn {
+  color: #d9e2ff;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.primary-btn:hover,
+.secondary-btn:hover,
+.ghost-btn:hover,
+.url-form button:hover {
+  transform: translateY(-1px);
+}
+
+.hero-stats {
+  display: grid;
+  gap: 14px;
+}
+
+.stat-card {
+  border-radius: 22px;
+  padding: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.stat-card span {
+  color: #a4b1cf;
+}
+
+.stat-card strong {
+  font-size: 2rem;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: 0.95fr 1.35fr;
+  gap: 24px;
+}
+
+.sidebar,
+.editor {
+  padding: 24px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.section-heading h2 {
+  margin-top: 4px;
+  font-size: 1.6rem;
+}
+
+.pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: #cdd7f4;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.playlist-list {
+  display: grid;
+  gap: 12px;
+}
+
+.playlist-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  text-align: left;
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: inherit;
+}
+
+.playlist-item.active {
+  border-color: rgba(115, 135, 255, 0.65);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(14, 165, 233, 0.12));
+}
+
+.playlist-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.playlist-meta strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 1rem;
+}
+
+.playlist-meta span,
+.note-card p,
+.editor-copy p,
+.empty-state p {
+  color: #a8b3cf;
+}
+
+.playlist-count {
+  text-align: right;
+  color: #d9e2ff;
+}
+
+.playlist-count span {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.playlist-count small {
+  color: #8b97b9;
+}
+
+.note-card {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(37, 99, 235, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.note-label,
+.editor-mood {
+  color: #d8b4fe;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.76rem;
+}
+
+.editor-hero {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 22px;
+  align-items: center;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.editor-art {
+  min-height: 220px;
+  border-radius: 26px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.editor-art::before {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.art-disc {
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.92) 0 14px, rgba(255, 255, 255, 0) 15px),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.12) 0 52px, rgba(255, 255, 255, 0) 53px),
+    rgba(8, 15, 32, 0.64);
+  display: grid;
+  place-items: center;
+  box-shadow:
+    inset 0 0 0 18px rgba(255, 255, 255, 0.06),
+    0 18px 50px rgba(0, 0, 0, 0.3);
+}
+
+.art-disc span {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.editor-copy h3 {
+  margin-top: 6px;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+}
+
+.editor-copy p {
+  margin: 12px 0 0;
+}
+
+.url-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.url-form input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  outline: none;
+}
+
+.url-form input:focus {
+  border-color: rgba(129, 140, 248, 0.9);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+}
+
+.track-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.track-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.track-item div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.track-index {
+  color: #8f96bc;
+  font-variant-numeric: tabular-nums;
+}
+
+.track-item a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #eaf0ff;
+}
+
+.ghost-btn {
+  flex-shrink: 0;
+}
+
+.empty-state {
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 28px;
+}
+
+.from-fuchsia-500 {
+  background: linear-gradient(135deg, #d946ef, #7c3aed);
+}
+
+.from-cyan-400 {
+  background: linear-gradient(135deg, #22d3ee, #2563eb);
+}
+
+.from-amber-400 {
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+}
+
+@media (max-width: 980px) {
+  .hero,
+  .content-grid,
+  .editor-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-copy h1 {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 16px;
+  }
+
+  .hero,
+  .sidebar,
+  .editor {
+    padding: 18px;
+  }
+
+  .url-form,
+  .track-item,
+  .playlist-item {
+    grid-template-columns: 1fr;
+  }
+
+  .track-item {
+    align-items: flex-start;
+  }
+
+  .section-heading {
+    flex-direction: column;
+  }
+}

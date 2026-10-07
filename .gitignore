@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
+
+client/node_modules/
+client/dist/
+client/*.tsbuildinfo
+client/vite.config.d.ts
+client/vite.config.js
