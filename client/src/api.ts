@@ -1,7 +1,6 @@
-const API_ORIGIN = import.meta.env.PROD
-  ? 'https://apinightwrapup.ziax.online'
-  : 'http://localhost:5000';
-const API_URL = `${API_ORIGIN.replace(/\/$/, '')}/api`;
+const API_URL = import.meta.env.PROD
+  ? '/api'
+  : 'http://localhost:5000/api';
 
 export type AuthUser = {
   id: string;
