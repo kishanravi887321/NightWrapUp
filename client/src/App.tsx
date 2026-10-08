@@ -47,6 +47,10 @@ function App() {
 
   useEffect(() => {
     const restoreSession = async () => {
+      if (!localStorage.getItem('nightwrapup_user')) {
+        setCheckingSession(false);
+        return;
+      }
       try {
         const renewed = await refresh();
         setSessionError('');
