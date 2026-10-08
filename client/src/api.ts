@@ -42,6 +42,15 @@ export type Song = {
   thumbnail?: string;
   channelName?: string;
   playCount?: number;
+  audio?: {
+    url?: string;
+    publicId?: string;
+    status?: 'pending' | 'ready' | 'failed';
+    quality?: string;
+    size?: string;
+    duration?: number;
+    provider?: string;
+  };
   createdAt: string;
   updatedAt: string;
 };

@@ -14,6 +14,7 @@ import {
   refresh,
 } from './api';
 import AuthScreen from './components/AuthScreen';
+import AudioPlayer from './components/AudioPlayer';
 import PlayerControls from './components/PlayerControls';
 import YouTubePlayer, { PlayerApi } from './components/YouTubePlayer';
 
@@ -394,20 +395,37 @@ function App() {
                         </div>
                       </div>
                       {playingSongId === song._id && (
-                        <YouTubePlayer
-                          videoId={song.youtubeVideoId}
-                          onReady={(player) => {
-                            playerRef.current = player;
-                            player.setVolume(volume);
-                          }}
-                          onEnded={playNextSong}
-                          onPlaying={() => setIsPaused(false)}
-                          onPaused={() => setIsPaused(true)}
-                          onProgress={(nextTime, nextDuration) => {
-                            setCurrentTime(nextTime);
-                            setDuration(nextDuration);
-                          }}
-                        />
+                        song.audio?.url ? (
+                          <AudioPlayer
+                            src={song.audio.url}
+                            onReady={(player) => {
+                              playerRef.current = player;
+                              player.setVolume(volume);
+                            }}
+                            onEnded={playNextSong}
+                            onPlaying={() => setIsPaused(false)}
+                            onPaused={() => setIsPaused(true)}
+                            onProgress={(nextTime, nextDuration) => {
+                              setCurrentTime(nextTime);
+                              setDuration(nextDuration);
+                            }}
+                          />
+                        ) : (
+                          <YouTubePlayer
+                            videoId={song.youtubeVideoId}
+                            onReady={(player) => {
+                              playerRef.current = player;
+                              player.setVolume(volume);
+                            }}
+                            onEnded={playNextSong}
+                            onPlaying={() => setIsPaused(false)}
+                            onPaused={() => setIsPaused(true)}
+                            onProgress={(nextTime, nextDuration) => {
+                              setCurrentTime(nextTime);
+                              setDuration(nextDuration);
+                            }}
+                          />
+                        )
                       )}
                       <div className="track-actions">
                         <small className="track-plays">{song.playCount ?? 0} plays</small>
