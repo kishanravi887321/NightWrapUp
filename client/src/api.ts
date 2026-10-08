@@ -19,6 +19,9 @@ export type AuthUser = {
   email: string;
   createdAt: string;
   updatedAt: string;
+  mobileSecretKeyCreatedAt?: string;
+  mobileSecretKeyLastUsedAt?: string;
+  mobileAccessEnabled?: boolean;
 };
 
 export type AuthSession = {
@@ -96,6 +99,12 @@ export const logout = () => request<void>('/auth/logout', { method: 'POST' });
 
 export const createExtensionToken = () =>
   request<{ extensionToken: string }>('/auth/extension-token', { method: 'POST' });
+
+export const createMobileSecretKey = () =>
+  request<{ secretKey: string; createdAt: string }>('/auth/mobile-key', { method: 'POST' });
+
+export const revokeMobileSecretKey = () =>
+  request<void>('/auth/mobile-key', { method: 'DELETE' });
 
 export const listLibraries = () => request<Library[]>('/libraries');
 

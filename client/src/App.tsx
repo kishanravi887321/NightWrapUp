@@ -9,6 +9,8 @@ import {
   deleteSong,
   listLibraries,
   listLibrarySongs,
+  createMobileSecretKey,
+  revokeMobileSecretKey,
   logout,
   recordSongPlay,
   refresh,
@@ -44,6 +46,8 @@ function App() {
   const [loadingSongs, setLoadingSongs] = useState(false);
   const [error, setError] = useState('');
   const [activeView, setActiveView] = useState<'studio' | 'profile'>('studio');
+  const [mobileSecretKey, setMobileSecretKey] = useState('');
+  const [mobileKeyBusy, setMobileKeyBusy] = useState(false);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -206,6 +210,64 @@ function App() {
     setSession(null);
   };
 
+  const handleCreateMobileKey = async () => {
+    setMobileKeyBusy(true);
+    setError('');
+    try {
+      const result = await createMobileSecretKey();
+      setMobileSecretKey(result.secretKey);
+      setSession((current) =>
+        current
+          ? {
+              ...current,
+              user: {
+                ...current.user,
+                mobileAccessEnabled: true,
+                mobileSecretKeyCreatedAt: result.createdAt,
+                mobileSecretKeyLastUsedAt: undefined,
+              },
+            }
+          : current,
+      );
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to create the mobile key.');
+    } finally {
+      setMobileKeyBusy(false);
+    }
+  };
+
+  const handleRevokeMobileKey = async () => {
+    if (!window.confirm('Revoke mobile access? The current key will stop working immediately.')) return;
+    setMobileKeyBusy(true);
+    setError('');
+    try {
+      await revokeMobileSecretKey();
+      setMobileSecretKey('');
+      setSession((current) =>
+        current
+          ? {
+              ...current,
+              user: {
+                ...current.user,
+                mobileAccessEnabled: false,
+                mobileSecretKeyCreatedAt: undefined,
+                mobileSecretKeyLastUsedAt: undefined,
+              },
+            }
+          : current,
+      );
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to revoke mobile access.');
+    } finally {
+      setMobileKeyBusy(false);
+    }
+  };
+
+  const copyMobileKey = async () => {
+    if (!mobileSecretKey) return;
+    await navigator.clipboard.writeText(mobileSecretKey);
+  };
+
   if (checkingSession) return <div className="loading-screen">Tuning your night<span>•</span><span>•</span><span>•</span></div>;
   if (!session) return <div className="app-shell"><div className="bg-orb bg-orb-left" /><div className="bg-orb bg-orb-right" /><AuthScreen onAuthenticated={handleAuthenticated} sessionError={sessionError} /></div>;
 
@@ -245,6 +307,43 @@ function App() {
               <div><span>Libraries</span><strong>{libraries.length}</strong></div>
               <div><span>Account</span><strong>Private account</strong></div>
             </div>
+            <section className="mobile-access-card">
+              <span className="eyebrow">Mobile listening</span>
+              <h2>Connect your phone</h2>
+              <p>
+                Create a mobile secret key here, then use it with your email in the listening app. Your key is shown only once.
+              </p>
+              {mobileSecretKey ? (
+                <div className="mobile-key-reveal">
+                  <code>{mobileSecretKey}</code>
+                  <button className="secondary-btn" type="button" onClick={copyMobileKey}>Copy key</button>
+                </div>
+              ) : (
+                <div className="mobile-access-actions">
+                  <button className="primary-btn" type="button" onClick={handleCreateMobileKey} disabled={mobileKeyBusy}>
+                    {mobileKeyBusy ? 'Creating…' : session.user.mobileAccessEnabled ? 'Regenerate mobile key' : 'Create mobile key'}
+                  </button>
+                  {session.user.mobileAccessEnabled && (
+                    <button className="danger-btn" type="button" onClick={handleRevokeMobileKey} disabled={mobileKeyBusy}>
+                      Revoke access
+                    </button>
+                  )}
+                </div>
+              )}
+              {session.user.mobileSecretKeyCreatedAt && (
+                <small className="mobile-key-meta">
+                  Key created {new Date(session.user.mobileSecretKeyCreatedAt).toLocaleDateString()}
+                  {session.user.mobileSecretKeyLastUsedAt
+                    ? ` · Last used ${new Date(session.user.mobileSecretKeyLastUsedAt).toLocaleDateString()}`
+                    : ' · Not used yet'}
+                </small>
+              )}
+              {mobileSecretKey && (
+                <button className="ghost-btn mobile-key-dismiss" type="button" onClick={() => setMobileSecretKey('')}>
+                  Hide key
+                </button>
+              )}
+            </section>
             <button className="profile-logout profile-page-logout" type="button" onClick={handleLogout}>Log out</button>
           </section>
         ) : (

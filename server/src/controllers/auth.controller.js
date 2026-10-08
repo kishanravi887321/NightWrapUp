@@ -1,5 +1,6 @@
 import User from '../models/user.model.js';
 import { OAuth2Client } from 'google-auth-library';
+import { randomBytes } from 'node:crypto';
 import env from '../config/env.js';
 import {
   createAccessToken,
@@ -167,6 +168,57 @@ export const createExtensionCredential = (request, response) => {
     success: true,
     data: { extensionToken: createExtensionToken(request.user.id) },
   });
+};
+
+export const createMobileSecretKey = async (request, response, next) => {
+  try {
+    const secretKey = `nw_${randomBytes(24).toString('base64url')}`;
+    const user = await User.findById(request.user.id).select('+mobileSecretKeyHash');
+    if (!user) {
+      const error = new Error('User not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    user.mobileSecretKeyHash = hashJwt(secretKey);
+    user.mobileSecretKeyCreatedAt = new Date();
+    user.mobileSecretKeyLastUsedAt = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    response.json({
+      success: true,
+      data: {
+        secretKey,
+        createdAt: user.mobileSecretKeyCreatedAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const revokeMobileSecretKey = async (request, response, next) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      request.user.id,
+      {
+        $unset: {
+          mobileSecretKeyHash: 1,
+          mobileSecretKeyCreatedAt: 1,
+          mobileSecretKeyLastUsedAt: 1,
+        },
+      },
+      { new: true },
+    );
+    if (!user) {
+      const error = new Error('User not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+    response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const logout = async (request, response, next) => {

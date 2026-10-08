@@ -30,6 +30,16 @@ const userSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
+    mobileSecretKeyHash: {
+      type: String,
+      select: false,
+    },
+    mobileSecretKeyCreatedAt: {
+      type: Date,
+    },
+    mobileSecretKeyLastUsedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
@@ -42,6 +52,9 @@ userSchema.methods.toSafeJSON = function toSafeJSON() {
     email: this.email,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
+    mobileSecretKeyCreatedAt: this.mobileSecretKeyCreatedAt,
+    mobileSecretKeyLastUsedAt: this.mobileSecretKeyLastUsedAt,
+    mobileAccessEnabled: Boolean(this.mobileSecretKeyCreatedAt),
   };
 };
 
