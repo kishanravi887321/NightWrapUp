@@ -82,6 +82,7 @@ type YouTubePlayerProps = {
 
 function YouTubePlayer({ videoId, onEnded }: YouTubePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const playerHostRef = useRef<HTMLDivElement>(null);
   const onEndedRef = useRef(onEnded);
 
   useEffect(() => {
@@ -92,7 +93,7 @@ function YouTubePlayer({ videoId, onEnded }: YouTubePlayerProps) {
     let player: { destroy: () => void; playVideo?: () => void } | undefined;
     let cancelled = false;
     const createPlayer = () => {
-      if (cancelled || !containerRef.current) return;
+      if (cancelled || !playerHostRef.current) return;
       const youtube = (window as Window & {
         YT?: { Player: new (element: HTMLDivElement, options: {
           videoId: string;
@@ -104,7 +105,7 @@ function YouTubePlayer({ videoId, onEnded }: YouTubePlayerProps) {
         }) => { destroy: () => void; playVideo?: () => void } };
       }).YT;
       if (!youtube) return;
-      player = new youtube.Player(containerRef.current, {
+      player = new youtube.Player(playerHostRef.current, {
         videoId,
         playerVars: { autoplay: 1, controls: 0, playsinline: 1, rel: 0 },
         events: {
@@ -131,11 +132,19 @@ function YouTubePlayer({ videoId, onEnded }: YouTubePlayerProps) {
     }
     return () => {
       cancelled = true;
-      player?.destroy();
+      try {
+        player?.destroy();
+      } catch (error) {
+        console.warn('Unable to clean up the YouTube player.', error);
+      }
     };
   }, [videoId]);
 
-  return <div ref={containerRef} className="audio-player" aria-hidden="true" />;
+  return (
+    <div ref={containerRef} className="audio-player" aria-hidden="true">
+      <div ref={playerHostRef} />
+    </div>
+  );
 }
 
 function App() {
