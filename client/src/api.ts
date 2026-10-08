@@ -41,6 +41,7 @@ export type Song = {
   youtubeVideoId: string;
   thumbnail?: string;
   channelName?: string;
+  playCount?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -93,3 +94,8 @@ export const deleteSong = (libraryId: string, songId: string) =>
 
 export const deleteLibrary = (libraryId: string) =>
   request<void>(`/libraries/${encodeURIComponent(libraryId)}`, { method: 'DELETE' });
+
+export const recordSongPlay = (libraryId: string, songId: string) =>
+  request<Song>(`/libraries/${encodeURIComponent(libraryId)}/songs/${encodeURIComponent(songId)}/play`, {
+    method: 'POST',
+  });
