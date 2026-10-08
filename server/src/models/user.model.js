@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
+    mobileRefreshTokenHash: {
+      type: String,
+      select: false,
+    },
     mobileSecretKeyHash: {
       type: String,
       select: false,
