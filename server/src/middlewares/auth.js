@@ -1,7 +1,9 @@
 import { verifyAccessToken } from '../utils/jwt.js';
 
 const requireAuth = (request, response, next) => {
-  const token = request.cookies.accessToken;
+  const authorization = request.headers.authorization;
+  const bearerToken = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+  const token = bearerToken || request.cookies.accessToken;
 
   if (!token) {
     const error = new Error('Authentication required.');
