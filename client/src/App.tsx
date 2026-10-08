@@ -35,9 +35,10 @@ function App() {
   const [volume, setVolume] = useState(80);
   const playerRef = useRef<PlayerApi | null>(null);
   const [selectedId, setSelectedId] = useState('');
-  const [newUrl, setNewUrl] = useState('');
+  const [showLibraryMenu, setShowLibraryMenu] = useState(false);
   const [libraryName, setLibraryName] = useState('');
   const [libraryDescription, setLibraryDescription] = useState('');
+  const [newUrl, setNewUrl] = useState('');
   const [loadingLibraries, setLoadingLibraries] = useState(false);
   const [loadingSongs, setLoadingSongs] = useState(false);
   const [error, setError] = useState('');
@@ -108,6 +109,21 @@ function App() {
 
   const selectedLibrary = libraries.find((library) => library._id === selectedId);
   const totalPlays = songs.reduce((sum, song) => sum + (song.playCount ?? 0), 0);
+
+  const handleCreateLibrary = async () => {
+    const name = libraryName.trim();
+    if (!name) return;
+    try {
+      const library = await createLibrary(name, libraryDescription.trim());
+      setLibraries((current) => [library, ...current]);
+      setSelectedId(library._id);
+      setLibraryName('');
+      setLibraryDescription('');
+      setShowLibraryMenu(false);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to create library.');
+    }
+  };
 
   const playSong = (index: number) => {
     const song = songs[index];
@@ -181,20 +197,6 @@ function App() {
     setSession(null);
   };
 
-  const handleCreateLibrary = async () => {
-    const name = libraryName.trim();
-    if (!name) return;
-    try {
-      const library = await createLibrary(name, libraryDescription.trim());
-      setLibraries((current) => [library, ...current]);
-      setSelectedId(library._id);
-      setLibraryName('');
-      setLibraryDescription('');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to create library.');
-    }
-  };
-
   if (checkingSession) return <div className="loading-screen">Tuning your night<span>•</span><span>•</span><span>•</span></div>;
   if (!session) return <div className="app-shell"><div className="bg-orb bg-orb-left" /><div className="bg-orb bg-orb-right" /><AuthScreen onAuthenticated={handleAuthenticated} sessionError={sessionError} /></div>;
 
@@ -245,8 +247,39 @@ function App() {
                 <span className="eyebrow">Your playlists</span>
                 <h2>Library</h2>
               </div>
-              <span className="pill">{libraries.length} libraries</span>
+              <div className="library-heading-actions">
+                <span className="pill">{libraries.length} libraries</span>
+                <button
+                  className={`menu-button ${showLibraryMenu ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setShowLibraryMenu((current) => !current)}
+                  aria-label="Open library actions"
+                  aria-expanded={showLibraryMenu}
+                >
+                  <span />
+                  <span />
+                  <span />
+                </button>
+              </div>
             </div>
+
+            {showLibraryMenu && (
+              <div className="library-menu">
+                <div className="library-menu-section">
+                  <span className="menu-label">Create library</span>
+                  <input value={libraryName} onChange={(event) => setLibraryName(event.target.value)} placeholder="Library name" maxLength={80} />
+                  <input value={libraryDescription} onChange={(event) => setLibraryDescription(event.target.value)} placeholder="Description (optional)" maxLength={240} />
+                  <button className="primary-btn" type="button" onClick={handleCreateLibrary}>Create library</button>
+                </div>
+                {selectedLibrary && (
+                  <div className="library-menu-section">
+                    <span className="menu-label">Save a song</span>
+                    <input type="url" value={newUrl} onChange={(event) => setNewUrl(event.target.value)} placeholder="Paste a YouTube URL" />
+                    <button className="secondary-btn" type="button" onClick={() => setError('Use the extension floating button to save songs.')}>Add link</button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="playlist-list">
               {libraries.map((library) => {
@@ -276,11 +309,6 @@ function App() {
               })}
             </div>
 
-            <div className="library-create">
-              <input value={libraryName} onChange={(event) => setLibraryName(event.target.value)} placeholder="New library name" maxLength={80} />
-              <input value={libraryDescription} onChange={(event) => setLibraryDescription(event.target.value)} placeholder="Short mood or description" maxLength={240} />
-              <button className="primary-btn" type="button" onClick={handleCreateLibrary}>Create library</button>
-            </div>
           </aside>
 
           <section className="glass-card editor">
@@ -308,20 +336,6 @@ function App() {
                   <div className="editor-copy">
                     <p className="editor-mood">Library • {selectedLibrary.description || 'Late-night listening'}</p>
                     <h3>{songs.length} songs · {totalPlays} plays</h3>
-                    <p>
-                      Your extension saves YouTube songs directly into this library. Add a URL here
-                      for a quick web-based save.
-                    </p>
-
-                    <div className="url-form">
-                      <input
-                        type="url"
-                        value={newUrl}
-                        onChange={(event) => setNewUrl(event.target.value)}
-                        placeholder="Paste a YouTube URL here"
-                      />
-                      <button type="button" onClick={() => setError('Use the extension floating button to save songs.')}>Add link</button>
-                    </div>
                   </div>
                 </div>
 
