@@ -14,6 +14,14 @@ const googleClient = new OAuth2Client(env.googleClientId);
 const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
 const cookieDomain = isProduction ? '.ziax.online' : undefined;
 
+const durationToMilliseconds = (duration, fallback) => {
+  const match = /^(\d+)\s*(s|m|h|d|w)$/i.exec(duration || '');
+  if (!match) return fallback;
+  const [, amount, unit] = match;
+  const multipliers = { s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000, w: 7 * 24 * 60 * 60 * 1000 };
+  return Number(amount) * multipliers[unit.toLowerCase()];
+};
+
 const cookieOptions = (maxAge, path) => ({
   httpOnly: true,
   secure: isProduction,
@@ -54,8 +62,16 @@ const issueTokens = async (user) => {
 
 const sendAuthResponse = (response, user, tokens) => {
   clearLegacyHostCookies(response);
-  response.cookie('accessToken', tokens.accessToken, cookieOptions(15 * 60 * 1000, '/'));
-  response.cookie('refreshToken', tokens.refreshToken, cookieOptions(7 * 24 * 60 * 60 * 1000, '/api/auth'));
+  response.cookie(
+    'accessToken',
+    tokens.accessToken,
+    cookieOptions(durationToMilliseconds(env.accessTokenExpiresIn, 15 * 60 * 1000), '/'),
+  );
+  response.cookie(
+    'refreshToken',
+    tokens.refreshToken,
+    cookieOptions(durationToMilliseconds(env.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000), '/api/auth'),
+  );
   response.status(200).json({
   success: true,
     data: { user: user.toSafeJSON(), extensionToken: createExtensionToken(user._id.toString()) },
