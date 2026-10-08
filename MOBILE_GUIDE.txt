@@ -242,3 +242,297 @@ POST   /libraries/:libraryId/songs/:songId/play
 POST   /libraries
 DELETE /libraries/:libraryId
 DELETE /libraries/:libraryId/songs/:songId
+
+
+11. Recommended Expo project structure
+--------------------------------------
+
+Use Expo with TypeScript and keep screens, server communication, storage,
+and playback separate. This structure is intentionally modular so the app
+can grow without putting all logic in App.tsx:
+
+nightwrapup-mobile/
+  app/
+    _layout.tsx
+    index.tsx
+    login.tsx
+    (app)/
+      _layout.tsx
+      index.tsx
+      library/
+        [libraryId].tsx
+      profile.tsx
+      settings.tsx
+  src/
+    api/
+      client.ts
+      endpoints/
+        auth.ts
+        libraries.ts
+        songs.ts
+      types.ts
+    auth/
+      auth-context.tsx
+      auth-storage.ts
+      auth-service.ts
+      auth-types.ts
+    components/
+      AppButton.tsx
+      AppTextInput.tsx
+      EmptyState.tsx
+      LoadingState.tsx
+      ErrorState.tsx
+      LibraryCard.tsx
+      SongRow.tsx
+      MiniPlayer.tsx
+      FullPlayer.tsx
+    features/
+      libraries/
+        library-hooks.ts
+        library-types.ts
+      songs/
+        song-hooks.ts
+        song-types.ts
+      player/
+        player-context.tsx
+        player-queue.ts
+        player-types.ts
+    hooks/
+      useAppState.ts
+      useDebounce.ts
+    lib/
+      constants.ts
+      dates.ts
+      errors.ts
+      validation.ts
+    theme/
+      colors.ts
+      spacing.ts
+      typography.ts
+      theme.ts
+  assets/
+    icon.png
+    adaptive-icon.png
+    splash.png
+  app.json
+  eas.json
+  package.json
+  tsconfig.json
+
+
+12. Expo navigation responsibilities
+-------------------------------------
+
+The app router should have two navigation areas:
+
+Unauthenticated:
+  app/index.tsx
+  app/login.tsx
+
+Authenticated:
+  app/(app)/index.tsx
+  app/(app)/library/[libraryId].tsx
+  app/(app)/profile.tsx
+  app/(app)/settings.tsx
+
+The root layout reads AuthContext and redirects:
+
+- No stored session -> /login
+- Valid session -> /(app)
+- Refresh failure -> clear tokens and redirect to /login
+
+Screens should render UI and call feature hooks. They should not contain raw
+fetch calls, token parsing, or Cloudinary URL logic.
+
+
+13. API layer design
+--------------------
+
+src/api/client.ts should be the only low-level HTTP client. It should:
+
+- Use the production base URL from EXPO_PUBLIC_API_URL.
+- Add Authorization: Bearer ACCESS_TOKEN.
+- Parse the standard { success, data, message } response shape.
+- On the first 401, call mobile-refresh once.
+- Replace both stored tokens after a successful refresh.
+- Retry the original request once.
+- Clear the session after refresh returns 401.
+- Never retry login, refresh, or validation errors indefinitely.
+
+src/api/endpoints/auth.ts:
+
+- mobileLogin(email, secretKey)
+- mobileRefresh(refreshToken)
+
+src/api/endpoints/libraries.ts:
+
+- listLibraries()
+- createLibrary(name, description)
+- deleteLibrary(libraryId)
+- listLibrarySongs(libraryId)
+
+src/api/endpoints/songs.ts:
+
+- recordSongPlay(libraryId, songId)
+- deleteSong(libraryId, songId)
+
+Keep endpoint response types in src/api/types.ts or feature type files.
+Do not duplicate response interfaces in individual screens.
+
+
+14. Authentication storage
+--------------------------
+
+Use expo-secure-store for:
+
+- nightwrapup_access_token
+- nightwrapup_refresh_token
+- nightwrapup_user
+
+Never store tokens in AsyncStorage, normal preferences, logs, or source
+code. The mobile secret key is used only by the login request and should
+not be stored after login unless a deliberate remember-key feature is
+added later.
+
+Suggested AuthContext state:
+
+type AuthState = {
+  status: 'loading' | 'signedOut' | 'signedIn';
+  user: AuthUser | null;
+  accessToken: string | null;
+}
+
+AuthContext should expose:
+
+- signIn(email, secretKey)
+- signOut()
+- restoreSession()
+- refreshSession()
+
+
+15. Audio player design
+-----------------------
+
+Use expo-audio or the Expo-supported audio package selected by the mobile
+agent. Keep playback inside PlayerContext rather than inside a song screen.
+
+The player should support:
+
+- play(song)
+- pause()
+- resume()
+- seek(seconds)
+- setVolume(value)
+- skipNext()
+- skipPrevious()
+- setQueue(songs)
+- clearQueue()
+- currentSong
+- position
+- duration
+- isPlaying
+
+Use song.audio.url as the native audio source when:
+
+- song.audio.status === "ready"
+- song.audio.url is present
+
+When no audio URL exists, show that the song is not available for native
+mobile playback instead of attempting to download from the YouTube URL.
+
+Call POST /libraries/:libraryId/songs/:songId/play once when playback
+actually starts, not every time the player component re-renders.
+
+
+16. State ownership
+-------------------
+
+AuthContext owns:
+- User session
+- Access and refresh tokens
+- Login, refresh, and logout
+
+Library hooks own:
+- Library list
+- Selected library
+- Library loading and error states
+
+Song hooks own:
+- Songs for the selected library
+- Song deletion
+- Play-count updates
+
+PlayerContext owns:
+- Queue
+- Current song
+- Native audio state
+- Playback controls
+
+Screens should combine these contexts and hooks rather than duplicating
+state or making direct database assumptions.
+
+
+17. Environment and Expo configuration
+--------------------------------------
+
+Use environment variables instead of hardcoding URLs:
+
+EXPO_PUBLIC_API_URL=https://apinightwrapup.ziax.online/api
+
+For EAS builds, configure the value with EAS environment variables. Do not
+put API secrets, MongoDB credentials, Cloudinary credentials, or JWT
+secrets in the Expo app. The mobile app only needs the public API URL.
+
+Recommended app.json basics:
+
+{
+  "expo": {
+    "name": "NightWrapUp",
+    "slug": "nightwrapup-mobile",
+    "scheme": "nightwrapup",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "plugins": ["expo-router", "expo-secure-store"]
+  }
+}
+
+
+18. Suggested implementation order
+-----------------------------------
+
+1. Create the Expo TypeScript project with Expo Router.
+2. Add the environment API URL and typed API client.
+3. Implement SecureStore-based AuthContext.
+4. Implement mobile login and mobile refresh.
+5. Add the signed-in route group and login redirect.
+6. Add library listing.
+7. Add song listing and Cloudinary audio playback.
+8. Add queue controls and the mini-player.
+9. Add play-count tracking.
+10. Add delete actions with confirmation.
+11. Add offline-friendly loading, empty, and error states.
+12. Test refresh-token rotation, logout, revoked keys, and expired sessions.
+13. Build Android/iOS packages with EAS only after the development flow is
+    stable.
+
+
+19. Future expansion points
+---------------------------
+
+Keep these features behind separate modules so they can be added later:
+
+- Offline queue metadata
+- Downloaded audio cache
+- Background audio controls
+- Lock-screen controls
+- Push notifications
+- Multiple mobile devices
+- Device/session management
+- Key rotation history
+- Pagination for large libraries
+- Search and filtering
+- Playlist reordering
+
+Do not make the first version depend on Firebase. The current API,
+Cloudinary audio URLs, SecureStore, and Expo audio playback are sufficient
+for the initial listening app.
