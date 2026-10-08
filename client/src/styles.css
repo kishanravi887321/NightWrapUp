@@ -556,6 +556,87 @@ button {
   font-size: 1.6rem;
 }
 
+.library-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-button {
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.menu-button span {
+  display: block;
+  width: 15px;
+  height: 2px;
+  border-radius: 999px;
+  background: #cdd7f4;
+  transition: transform 0.18s ease;
+}
+
+.menu-button.active {
+  border-color: rgba(129, 140, 248, 0.65);
+  background: rgba(99, 102, 241, 0.18);
+}
+
+.library-menu {
+  display: grid;
+  gap: 14px;
+  margin: -4px 0 18px;
+  padding: 14px;
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  border-radius: 18px;
+  background: rgba(8, 13, 29, 0.82);
+}
+
+.library-menu-section {
+  display: grid;
+  gap: 9px;
+}
+
+.library-menu-section + .library-menu-section {
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.menu-label {
+  color: #cdd7f4;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.library-menu input {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 13px;
+  outline: none;
+  color: #f8faff;
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.library-menu input:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14);
+}
+
+.library-menu .primary-btn,
+.library-menu .secondary-btn {
+  width: 100%;
+}
+
 .pill {
   padding: 8px 12px;
   border-radius: 999px;
@@ -1113,6 +1194,10 @@ button {
 
   .section-heading {
     align-items: stretch;
+  }
+
+  .library-heading-actions {
+    justify-content: space-between;
   }
 
   .editor-actions {
