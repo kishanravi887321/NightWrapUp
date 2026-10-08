@@ -307,8 +307,6 @@ function App() {
   if (checkingSession) return <div className="loading-screen">Tuning your night<span>•</span><span>•</span><span>•</span></div>;
   if (!session) return <div className="app-shell"><div className="bg-orb bg-orb-left" /><div className="bg-orb bg-orb-right" /><AuthScreen onAuthenticated={handleAuthenticated} sessionError={sessionError} /></div>;
 
-  const totalTracks = libraries.reduce((sum, library) => sum + (library.songCount ?? 0), 0);
-
   return (
     <div className="app-shell">
       <div className="bg-orb bg-orb-left" />
@@ -337,19 +335,18 @@ function App() {
             </div>
           </div>
 
-          <div className="hero-stats">
-            <article className="stat-card">
-              <span>Total playlists</span>
-              <strong>{libraries.length}</strong>
-            </article>
-            <article className="stat-card">
-              <span>Saved URLs</span>
-              <strong>{totalTracks}</strong>
-            </article>
-            <article className="stat-card">
-              <span>Tracks tracked</span>
-              <strong>{songs.length}</strong>
-            </article>
+          <div className="profile-card">
+            <div className="profile-avatar" aria-hidden="true">
+              {session.user.email.charAt(0).toUpperCase()}
+            </div>
+            <span className="eyebrow">Your profile</span>
+            <h2>{session.user.email.split('@')[0]}</h2>
+            <p>{session.user.email}</p>
+            <div className="profile-meta">
+              <span>{libraries.length} {libraries.length === 1 ? 'library' : 'libraries'}</span>
+              <span>Private account</span>
+            </div>
+            <button className="profile-logout" type="button" onClick={handleLogout}>Log out</button>
           </div>
         </section>
 
