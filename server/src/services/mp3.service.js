@@ -1,11 +1,10 @@
 import { createWriteStream } from 'node:fs';
-import { mkdir, rename, unlink } from 'node:fs/promises';
+import { mkdtemp, rename, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { fileURLToPath } from 'node:url';
 import { uploadMp3 } from './cloudinary.service.js';
 
-const serviceDirectory = fileURLToPath(new URL('../../public/mp3/', import.meta.url));
 const infoEndpoint = 'https://embedded.flashdl.one/api/info.php';
 const progressEndpoint = 'https://api.ytnow.online/wp-json/rapid-api/v1/progress';
 const allowedDownloadHosts = new Set(['ex.speedlycdn.online']);
@@ -43,43 +42,43 @@ export const downloadMp3 = async (youtubeUrl) => {
     size: completed.size,
   });
   const downloadUrl = validateDownloadUrl(completed.url);
-  await mkdir(serviceDirectory, { recursive: true });
-
   const filename = `${sanitizeFilename(completed.title || info.title || videoId)}-${videoId}.mp3`;
-  const targetPath = join(serviceDirectory, filename);
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'nightwrapup-'));
+  const targetPath = join(temporaryDirectory, filename);
   const temporaryPath = `${targetPath}.part`;
 
   try {
     await downloadFile(downloadUrl, temporaryPath);
     await rename(temporaryPath, targetPath);
     console.info('[mp3] MP3 downloaded locally', { videoId, filename });
-  } catch (error) {
-    await unlink(temporaryPath).catch(() => undefined);
-    throw error;
+
+    const cloudinaryAsset = await uploadMp3(
+      targetPath,
+      `nightwrapup/mp3/${filename.replace(/\.mp3$/i, '')}`,
+    );
+    console.info('[mp3] MP3 uploaded to Cloudinary', {
+      videoId,
+      publicId: cloudinaryAsset.public_id,
+      secureUrl: cloudinaryAsset.secure_url,
+    });
+
+    return {
+      filename,
+      title: completed.title || info.title || videoId,
+      quality: completed.quality || 'mp3',
+      size: completed.size,
+      duration: info.duration,
+      url: cloudinaryAsset.secure_url,
+      cloudinaryPublicId: cloudinaryAsset.public_id,
+    };
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true }).catch((error) => {
+      console.warn('[mp3] Temporary MP3 cleanup failed', {
+        videoId,
+        message: error.message,
+      });
+    });
   }
-
-  const cloudinaryAsset = await uploadMp3(
-    targetPath,
-    `nightwrapup/mp3/${filename.replace(/\.mp3$/i, '')}`,
-  );
-  console.info('[mp3] MP3 uploaded to Cloudinary', {
-    videoId,
-    publicId: cloudinaryAsset.public_id,
-    secureUrl: cloudinaryAsset.secure_url,
-  });
-  await unlink(targetPath).catch((error) => {
-    console.warn('Cloudinary upload succeeded, but local MP3 cleanup failed.', error.message);
-  });
-
-  return {
-    filename,
-    title: completed.title || info.title || videoId,
-    quality: completed.quality || 'mp3',
-    size: completed.size,
-    duration: info.duration,
-    url: cloudinaryAsset.secure_url,
-    cloudinaryPublicId: cloudinaryAsset.public_id,
-  };
 };
 
 async function requestInfo(videoId) {
