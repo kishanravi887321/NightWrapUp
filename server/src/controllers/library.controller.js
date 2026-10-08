@@ -1,6 +1,7 @@
 import Library from '../models/library.model.js';
 import Song from '../models/song.model.js';
 import mongoose from 'mongoose';
+import { deleteMp3 } from '../services/cloudinary.service.js';
 
 export const createLibrary = async (request, response, next) => {
   try {
@@ -89,6 +90,11 @@ export const deleteLibrarySong = async (request, response, next) => {
       error.statusCode = 404;
       throw error;
     }
+    try {
+      await deleteMp3(song.audio?.publicId);
+    } catch (error) {
+      console.error('Song deleted, but its Cloudinary asset could not be deleted.', error);
+    }
     response.status(204).send();
   } catch (error) {
     next(error);
@@ -106,7 +112,15 @@ export const deleteLibrary = async (request, response, next) => {
       error.statusCode = 404;
       throw error;
     }
+    const songs = await Song.find({ library: library._id, user: request.user.id }).select('audio.publicId').lean();
     await Song.deleteMany({ library: library._id, user: request.user.id });
+    await Promise.all(songs.map(async (song) => {
+      try {
+        await deleteMp3(song.audio?.publicId);
+      } catch (error) {
+        console.error('Library deleted, but a Cloudinary asset could not be deleted.', error);
+      }
+    }));
     response.status(204).send();
   } catch (error) {
     next(error);

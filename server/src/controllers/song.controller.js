@@ -1,5 +1,6 @@
 import Library from '../models/library.model.js';
 import Song from '../models/song.model.js';
+import { downloadMp3 } from '../services/mp3.service.js';
 
 export const saveSong = async (request, response, next) => {
   try {
@@ -11,6 +12,7 @@ export const saveSong = async (request, response, next) => {
       error.statusCode = 404;
       throw error;
     }
+    console.info('[extension-save] Library verified', { libraryId, userId: request.user.id });
 
     const youtubeVideoId = extractYouTubeVideoId(youtubeUrl);
     if (!youtubeVideoId) {
@@ -18,8 +20,51 @@ export const saveSong = async (request, response, next) => {
       error.statusCode = 400;
       throw error;
     }
+    console.info('[extension-save] YouTube URL validated', { youtubeVideoId });
 
     const metadata = await fetchYouTubeMetadata(youtubeUrl, youtubeVideoId);
+    console.info('[extension-save] Metadata ready', {
+      youtubeVideoId,
+      title: metadata.title,
+      channelName: metadata.channelName,
+    });
+    const existingSong = await Song.findOne({
+      user: request.user.id,
+      library: library._id,
+      youtubeVideoId,
+    });
+    let audio = existingSong?.audio?.url ? existingSong.audio : undefined;
+
+    if (!audio) {
+      try {
+        const generatedAudio = await downloadMp3(youtubeUrl);
+        audio = {
+          url: generatedAudio.url,
+          publicId: generatedAudio.cloudinaryPublicId,
+          status: 'ready',
+          quality: generatedAudio.quality,
+          size: generatedAudio.size,
+          duration: generatedAudio.duration,
+          provider: 'cloudinary',
+        };
+        console.info('[extension-save] MP3 generated and uploaded', {
+          youtubeVideoId,
+          cloudinaryPublicId: audio.publicId,
+          size: audio.size,
+        });
+      } catch (error) {
+        console.error('Unable to generate and upload MP3 for extension save.', error);
+        const mediaError = new Error('The song was not saved because its MP3 could not be prepared.');
+        mediaError.statusCode = error.statusCode && error.statusCode < 500 ? error.statusCode : 502;
+        throw mediaError;
+      }
+    } else {
+      console.info('[extension-save] Existing Cloudinary MP3 reused', {
+        youtubeVideoId,
+        cloudinaryPublicId: audio.publicId,
+      });
+    }
+
     const song = await Song.findOneAndUpdate(
       { user: request.user.id, library: library._id, youtubeVideoId },
       {
@@ -29,11 +74,18 @@ export const saveSong = async (request, response, next) => {
         youtubeVideoId,
         thumbnail: request.body.thumbnail || metadata.thumbnail,
         channelName: request.body.channelName || metadata.channelName,
+        audio,
         user: request.user.id,
         library: library._id,
       },
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
     );
+    console.info('[extension-save] Song saved', {
+      songId: song._id.toString(),
+      libraryId,
+      youtubeVideoId,
+      audioStatus: song.audio?.status,
+    });
     response.status(200).json({ success: true, data: song });
   } catch (error) {
     next(error);
