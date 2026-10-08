@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { GoogleLogin } from '@react-oauth/google';
 import {
   AuthSession,
   ApiError,
@@ -8,144 +7,15 @@ import {
   createLibrary,
   deleteLibrary,
   deleteSong,
-  googleAuth,
   listLibraries,
   listLibrarySongs,
   logout,
+  recordSongPlay,
   refresh,
 } from './api';
-
-function AuthScreen({
-  onAuthenticated,
-  sessionError,
-}: {
-  onAuthenticated: (session: AuthSession) => void;
-  sessionError?: string;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleGoogleSuccess = async (credential?: string) => {
-    if (!credential) {
-      setError('Google did not return a sign-in credential.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    try {
-      onAuthenticated(await googleAuth(credential));
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to authenticate.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <main className="auth-layout">
-      <div className="auth-showcase">
-        <span className="brand-mark">NW</span>
-        <span className="eyebrow">NightWrapUp / private listening space</span>
-        <h1>Your late-night soundtrack, beautifully organized.</h1>
-        <p>Save the songs that find you after dark and keep your personal library in sync.</p>
-        <div className="auth-proof"><span>✦</span> Your library. Your flow. Your night.</div>
-      </div>
-      <section className="auth-card glass-card">
-        <div className="auth-card-heading">
-          <span className="eyebrow">Welcome to your private listening space</span>
-          <h2>Sign in with Google</h2>
-          <p>New accounts are created automatically. Existing accounts are signed in instantly.</p>
-        </div>
-        <div className="google-login">
-          <GoogleLogin
-            onSuccess={(credentialResponse) => handleGoogleSuccess(credentialResponse.credential)}
-            onError={() => setError('Google sign-in was cancelled or failed.')}
-            useOneTap
-            theme="filled_black"
-            shape="pill"
-            size="large"
-            width="320"
-          />
-        </div>
-        {busy && <div className="auth-status">Opening your space…</div>}
-        {sessionError && <div className="form-error">{sessionError}</div>}
-        {error && <div className="form-error">{error}</div>}
-      </section>
-    </main>
-  );
-}
-
-type YouTubePlayerProps = {
-  videoId: string;
-  onEnded: () => void;
-};
-
-function YouTubePlayer({ videoId, onEnded }: YouTubePlayerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const playerHostRef = useRef<HTMLDivElement>(null);
-  const onEndedRef = useRef(onEnded);
-
-  useEffect(() => {
-    onEndedRef.current = onEnded;
-  }, [onEnded]);
-
-  useEffect(() => {
-    let player: { destroy: () => void; playVideo?: () => void } | undefined;
-    let cancelled = false;
-    const createPlayer = () => {
-      if (cancelled || !playerHostRef.current) return;
-      const youtube = (window as Window & {
-        YT?: { Player: new (element: HTMLDivElement, options: {
-          videoId: string;
-          playerVars: Record<string, number>;
-          events: {
-            onReady: (event: { target: { playVideo: () => void } }) => void;
-            onStateChange: (event: { data: number }) => void;
-          };
-        }) => { destroy: () => void; playVideo?: () => void } };
-      }).YT;
-      if (!youtube) return;
-      player = new youtube.Player(playerHostRef.current, {
-        videoId,
-        playerVars: { autoplay: 1, controls: 0, playsinline: 1, rel: 0 },
-        events: {
-          onReady: (event) => event.target.playVideo(),
-          onStateChange: (event) => event.data === 0 && onEndedRef.current(),
-        },
-      });
-    };
-
-    const existingScript = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
-    if ((window as Window & { YT?: unknown }).YT) {
-      createPlayer();
-    } else {
-      const script = (existingScript as HTMLScriptElement | null) || document.createElement('script');
-      if (!existingScript) {
-        script.src = 'https://www.youtube.com/iframe_api';
-        document.head.appendChild(script);
-      }
-      const previousReady = (window as Window & { onYouTubeIframeAPIReady?: () => void }).onYouTubeIframeAPIReady;
-      (window as Window & { onYouTubeIframeAPIReady?: () => void }).onYouTubeIframeAPIReady = () => {
-        previousReady?.();
-        createPlayer();
-      };
-    }
-    return () => {
-      cancelled = true;
-      try {
-        player?.destroy();
-      } catch (error) {
-        console.warn('Unable to clean up the YouTube player.', error);
-      }
-    };
-  }, [videoId]);
-
-  return (
-    <div ref={containerRef} className="audio-player" aria-hidden="true">
-      <div ref={playerHostRef} />
-    </div>
-  );
-}
+import AuthScreen from './components/AuthScreen';
+import PlayerControls from './components/PlayerControls';
+import YouTubePlayer, { PlayerApi } from './components/YouTubePlayer';
 
 function App() {
   const [session, setSession] = useState<AuthSession | null>(() => {
@@ -159,6 +29,11 @@ function App() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [playingSongId, setPlayingSongId] = useState('');
   const [playingIndex, setPlayingIndex] = useState(-1);
+  const [isPaused, setIsPaused] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(80);
+  const playerRef = useRef<PlayerApi | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [libraryName, setLibraryName] = useState('');
@@ -166,6 +41,7 @@ function App() {
   const [loadingLibraries, setLoadingLibraries] = useState(false);
   const [loadingSongs, setLoadingSongs] = useState(false);
   const [error, setError] = useState('');
+  const [activeView, setActiveView] = useState<'studio' | 'profile'>('studio');
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -225,13 +101,25 @@ function App() {
   useEffect(() => {
     setPlayingSongId('');
     setPlayingIndex(-1);
+    playerRef.current = null;
+    setCurrentTime(0);
+    setDuration(0);
   }, [selectedId]);
 
   const selectedLibrary = libraries.find((library) => library._id === selectedId);
+  const totalPlays = songs.reduce((sum, song) => sum + (song.playCount ?? 0), 0);
 
   const playSong = (index: number) => {
+    const song = songs[index];
+    if (!song) return;
     setPlayingIndex(index);
-    setPlayingSongId(songs[index]?._id ?? '');
+    setPlayingSongId(song._id);
+    setIsPaused(false);
+    void recordSongPlay(selectedId, song._id)
+      .then((updatedSong) => {
+        setSongs((current) => current.map((item) => item._id === updatedSong._id ? updatedSong : item));
+      })
+      .catch((requestError) => console.warn('Unable to record song play.', requestError));
   };
 
   const playNextSong = () => {
@@ -241,6 +129,9 @@ function App() {
     }
     setPlayingSongId('');
     setPlayingIndex(-1);
+    playerRef.current = null;
+    setCurrentTime(0);
+    setDuration(0);
   };
 
   const handleDeleteSong = async (song: Song) => {
@@ -307,18 +198,46 @@ function App() {
   if (checkingSession) return <div className="loading-screen">Tuning your night<span>•</span><span>•</span><span>•</span></div>;
   if (!session) return <div className="app-shell"><div className="bg-orb bg-orb-left" /><div className="bg-orb bg-orb-right" /><AuthScreen onAuthenticated={handleAuthenticated} sessionError={sessionError} /></div>;
 
+  const profileName = session.user.email.split('@')[0];
+
   return (
     <div className="app-shell">
       <div className="bg-orb bg-orb-left" />
       <div className="bg-orb bg-orb-right" />
 
       <main className="app">
+        <nav className="app-nav" aria-label="Main navigation">
+          <button className="app-brand" type="button" onClick={() => setActiveView('studio')}>NW <span>NightWrapUp</span></button>
+          <button className={`nav-link ${activeView === 'studio' ? 'active' : ''}`} type="button" onClick={() => setActiveView('studio')}>Studio</button>
+          <button className={`nav-link ${activeView === 'profile' ? 'active' : ''}`} type="button" onClick={() => setActiveView('profile')}>Profile</button>
+        </nav>
         {error && (
           <div className="app-alert" role="alert">
             <span>{error}</span>
             <button type="button" onClick={() => setError('')}>Dismiss</button>
           </div>
         )}
+        {activeView === 'profile' ? (
+          <section className="profile-page glass-card">
+            <button className="back-link" type="button" onClick={() => setActiveView('studio')}>← Back to studio</button>
+            <div className="profile-page-heading">
+              <div className="profile-avatar" aria-hidden="true">{session.user.email.charAt(0).toUpperCase()}</div>
+              <div>
+                <span className="eyebrow">Account settings</span>
+                <h1>Your profile</h1>
+                <p>Manage your NightWrapUp account and listening space.</p>
+              </div>
+            </div>
+            <div className="profile-details">
+              <div><span>Name</span><strong>{profileName}</strong></div>
+              <div><span>Email</span><strong>{session.user.email}</strong></div>
+              <div><span>Libraries</span><strong>{libraries.length}</strong></div>
+              <div><span>Account</span><strong>Private account</strong></div>
+            </div>
+            <button className="profile-logout profile-page-logout" type="button" onClick={handleLogout}>Log out</button>
+          </section>
+        ) : (
+        <>
         <section className="hero glass-card">
           <div className="hero-copy">
             <span className="eyebrow">NightWrapUp / Playlist Studio</span>
@@ -327,26 +246,6 @@ function App() {
               Add, preview, and organize the URLs you plan to save in your database later.
               Start with a smooth, premium interface your users will actually enjoy using.
             </p>
-
-            <div className="hero-actions">
-              <button className="ghost-btn user-menu" type="button" onClick={handleLogout}>
-                {session.user.email} · Log out
-              </button>
-            </div>
-          </div>
-
-          <div className="profile-card">
-            <div className="profile-avatar" aria-hidden="true">
-              {session.user.email.charAt(0).toUpperCase()}
-            </div>
-            <span className="eyebrow">Your profile</span>
-            <h2>{session.user.email.split('@')[0]}</h2>
-            <p>{session.user.email}</p>
-            <div className="profile-meta">
-              <span>{libraries.length} {libraries.length === 1 ? 'library' : 'libraries'}</span>
-              <span>Private account</span>
-            </div>
-            <button className="profile-logout" type="button" onClick={handleLogout}>Log out</button>
           </div>
         </section>
 
@@ -419,7 +318,7 @@ function App() {
 
                   <div className="editor-copy">
                     <p className="editor-mood">Library • {selectedLibrary.description || 'Late-night listening'}</p>
-                    <h3>{songs.length} songs in this library</h3>
+                    <h3>{songs.length} songs · {totalPlays} plays</h3>
                     <p>
                       Your extension saves YouTube songs directly into this library. Add a URL here
                       for a quick web-based save.
@@ -436,6 +335,36 @@ function App() {
                     </div>
                   </div>
                 </div>
+
+                {playingSongId && songs[playingIndex] && (
+                  <PlayerControls
+                    title={songs[playingIndex].title}
+                    currentTime={currentTime}
+                    duration={duration}
+                    volume={volume}
+                    paused={isPaused}
+                    canGoPrevious={playingIndex > 0}
+                    canGoNext={playingIndex + 1 < songs.length}
+                    onToggle={() => {
+                      if (isPaused) {
+                        playerRef.current?.playVideo();
+                      } else {
+                        playerRef.current?.pauseVideo();
+                      }
+                      setIsPaused((current) => !current);
+                    }}
+                    onPrevious={() => playingIndex > 0 && playSong(playingIndex - 1)}
+                    onNext={() => playingIndex + 1 < songs.length && playSong(playingIndex + 1)}
+                    onSeek={(value) => {
+                      playerRef.current?.seekTo(value, true);
+                      setCurrentTime(value);
+                    }}
+                    onVolume={(value) => {
+                      setVolume(value);
+                      playerRef.current?.setVolume(value);
+                    }}
+                  />
+                )}
 
                 <div className="track-list">
                   {songs.map((song, index) => (
@@ -458,9 +387,25 @@ function App() {
                         </div>
                       </div>
                       {playingSongId === song._id && (
-                        <YouTubePlayer videoId={song.youtubeVideoId} onEnded={playNextSong} />
+                        <YouTubePlayer
+                          videoId={song.youtubeVideoId}
+                          onReady={(player) => {
+                            playerRef.current = player;
+                            player.setVolume(volume);
+                          }}
+                          onEnded={playNextSong}
+                          onPlaying={() => setIsPaused(false)}
+                          onPaused={() => setIsPaused(true)}
+                          onProgress={(nextTime, nextDuration) => {
+                            setCurrentTime(nextTime);
+                            setDuration(nextDuration);
+                          }}
+                        />
                       )}
-                      <button className="track-delete" type="button" onClick={() => handleDeleteSong(song)} aria-label={`Delete ${song.title}`}>×</button>
+                      <div className="track-actions">
+                        <small className="track-plays">{song.playCount ?? 0} plays</small>
+                        <button className="track-delete" type="button" onClick={() => handleDeleteSong(song)} aria-label={`Delete ${song.title}`}>×</button>
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -473,6 +418,8 @@ function App() {
             )}
           </section>
         </section>
+        </>
+        )}
       </main>
     </div>
   );
