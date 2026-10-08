@@ -47,6 +47,7 @@ function App() {
   const [error, setError] = useState('');
   const [activeView, setActiveView] = useState<'studio' | 'profile'>('studio');
   const [mobileSecretKey, setMobileSecretKey] = useState('');
+  const [showMobileSecretKey, setShowMobileSecretKey] = useState(true);
   const [mobileKeyBusy, setMobileKeyBusy] = useState(false);
 
   useEffect(() => {
@@ -216,6 +217,7 @@ function App() {
     try {
       const result = await createMobileSecretKey();
       setMobileSecretKey(result.secretKey);
+      setShowMobileSecretKey(true);
       setSession((current) =>
         current
           ? {
@@ -243,6 +245,7 @@ function App() {
     try {
       await revokeMobileSecretKey();
       setMobileSecretKey('');
+      setShowMobileSecretKey(false);
       setSession((current) =>
         current
           ? {
@@ -315,7 +318,18 @@ function App() {
               </p>
               {mobileSecretKey ? (
                 <div className="mobile-key-reveal">
-                  <code>{mobileSecretKey}</code>
+                  <code aria-label={showMobileSecretKey ? 'Visible mobile key' : 'Hidden mobile key'}>
+                    {showMobileSecretKey ? mobileSecretKey : '••••••••'}
+                  </code>
+                  <button
+                    className="secondary-btn mobile-key-eye"
+                    type="button"
+                    onClick={() => setShowMobileSecretKey((visible) => !visible)}
+                    aria-label={showMobileSecretKey ? 'Hide mobile key' : 'Show mobile key'}
+                    title={showMobileSecretKey ? 'Hide mobile key' : 'Show mobile key'}
+                  >
+                    {showMobileSecretKey ? '◉' : '◎'}
+                  </button>
                   <button className="secondary-btn" type="button" onClick={copyMobileKey}>Copy key</button>
                 </div>
               ) : (
@@ -339,7 +353,10 @@ function App() {
                 </small>
               )}
               {mobileSecretKey && (
-                <button className="ghost-btn mobile-key-dismiss" type="button" onClick={() => setMobileSecretKey('')}>
+                <button className="ghost-btn mobile-key-dismiss" type="button" onClick={() => {
+                  setMobileSecretKey('');
+                  setShowMobileSecretKey(false);
+                }}>
                   Hide key
                 </button>
               )}

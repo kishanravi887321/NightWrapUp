@@ -212,6 +212,12 @@ button {
   background: rgba(0, 0, 0, 0.24);
 }
 
+.mobile-key-eye {
+  min-width: 42px;
+  padding: 10px 12px;
+  font-size: 1rem;
+}
+
 .mobile-key-meta {
   color: #8e9abc;
 }

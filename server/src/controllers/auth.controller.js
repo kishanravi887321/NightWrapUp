@@ -63,6 +63,14 @@ const issueTokens = async (user) => {
   return { accessToken, refreshToken };
 };
 
+const issueMobileTokens = async (user) => {
+  const accessToken = createAccessToken(user._id.toString());
+  const refreshToken = createRefreshToken(user._id.toString());
+  user.mobileRefreshTokenHash = hashJwt(refreshToken);
+  await user.save({ validateBeforeSave: false });
+  return { accessToken, refreshToken };
+};
+
 const sendAuthResponse = (response, user, tokens) => {
   clearLegacyHostCookies(response);
   response.cookie(
@@ -78,6 +86,17 @@ const sendAuthResponse = (response, user, tokens) => {
   response.status(200).json({
   success: true,
     data: { user: user.toSafeJSON(), extensionToken: createExtensionToken(user._id.toString()) },
+  });
+};
+
+const sendMobileAuthResponse = (response, user, tokens) => {
+  response.json({
+    success: true,
+    data: {
+      user: user.toSafeJSON(),
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    },
   });
 };
 
@@ -163,6 +182,60 @@ export const refresh = async (request, response, next) => {
   }
 };
 
+export const mobileLogin = async (request, response, next) => {
+  try {
+    const email = typeof request.body.email === 'string' ? request.body.email.trim().toLowerCase() : '';
+    const secretKey = typeof request.body.secretKey === 'string' ? request.body.secretKey.trim() : '';
+    if (!email || !/^\d{8}$/.test(secretKey)) {
+      const error = new Error('Email and an 8-digit mobile key are required.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const user = await User.findOne({ email }).select('+mobileSecretKeyHash +mobileRefreshTokenHash');
+    if (!user || !user.mobileSecretKeyHash || user.mobileSecretKeyHash !== hashJwt(secretKey)) {
+      const error = new Error('Invalid email or mobile key.');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    user.mobileSecretKeyLastUsedAt = new Date();
+    await user.save({ validateBeforeSave: false });
+    const tokens = await issueMobileTokens(user);
+    sendMobileAuthResponse(response, user, tokens);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const mobileRefresh = async (request, response, next) => {
+  try {
+    const refreshToken = typeof request.body.refreshToken === 'string' ? request.body.refreshToken : '';
+    if (!refreshToken) {
+      const error = new Error('Refresh token is required.');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const payload = verifyRefreshToken(refreshToken);
+    const user = await User.findById(payload.sub).select('+mobileRefreshTokenHash');
+    if (!user || user.mobileRefreshTokenHash !== hashJwt(refreshToken)) {
+      const error = new Error('Refresh token is invalid or expired.');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const tokens = await issueMobileTokens(user);
+    sendMobileAuthResponse(response, user, tokens);
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      error.statusCode = 401;
+      error.message = 'Refresh token is invalid or expired.';
+    }
+    next(error);
+  }
+};
+
 export const createExtensionCredential = (request, response) => {
   response.json({
     success: true,
@@ -183,6 +256,7 @@ export const createMobileSecretKey = async (request, response, next) => {
     user.mobileSecretKeyHash = hashJwt(secretKey);
     user.mobileSecretKeyCreatedAt = new Date();
     user.mobileSecretKeyLastUsedAt = undefined;
+    user.mobileRefreshTokenHash = undefined;
     await user.save({ validateBeforeSave: false });
 
     response.json({
@@ -206,6 +280,7 @@ export const revokeMobileSecretKey = async (request, response, next) => {
           mobileSecretKeyHash: 1,
           mobileSecretKeyCreatedAt: 1,
           mobileSecretKeyLastUsedAt: 1,
+          mobileRefreshTokenHash: 1,
         },
       },
       { new: true },

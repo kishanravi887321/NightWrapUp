@@ -1,0 +1,212 @@
+NightWrapUp Mobile App Integration Guide
+========================================
+
+Production API base URL:
+https://apinightwrapup.ziax.online/api
+
+The mobile app does not use Firebase. A user must first sign in on the
+NightWrapUp website and create an 8-digit numeric mobile key in:
+
+Profile -> Mobile listening -> Create mobile key
+
+The key is displayed only once. It is stored on the server as a hash.
+If the user loses it, they must regenerate it on the website.
+
+
+1. Mobile login
+----------------
+
+POST /auth/mobile-login
+Content-Type: application/json
+
+Request:
+{
+  "email": "user@example.com",
+  "secretKey": "48291637"
+}
+
+The secretKey must contain exactly 8 numeric digits.
+
+Success response:
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "USER_ID",
+      "email": "user@example.com",
+      "createdAt": "DATE",
+      "updatedAt": "DATE",
+      "mobileAccessEnabled": true,
+      "mobileSecretKeyCreatedAt": "DATE",
+      "mobileSecretKeyLastUsedAt": "DATE"
+    },
+    "accessToken": "ACCESS_TOKEN",
+    "refreshToken": "REFRESH_TOKEN"
+  }
+}
+
+Store both tokens securely on the phone. Do not log or display them.
+The access token lasts 15 days by default. The refresh token lasts 30 days
+by default. The server rotates the refresh token, so replace the stored
+refresh token after every successful mobile refresh.
+
+
+2. Refresh mobile session
+-------------------------
+
+POST /auth/mobile-refresh
+Content-Type: application/json
+
+Request:
+{
+  "refreshToken": "STORED_REFRESH_TOKEN"
+}
+
+Success response has the same shape as mobile login:
+data.accessToken
+data.refreshToken
+data.user
+
+If this returns 401, send the user back to the mobile login screen.
+
+
+3. Authenticated requests
+--------------------------
+
+Send the access token as a bearer token:
+
+Authorization: Bearer ACCESS_TOKEN
+
+All user data is scoped to the authenticated user. Never send the mobile
+secret key with normal library or song requests.
+
+
+4. Libraries
+------------
+
+GET /libraries
+Authorization: Bearer ACCESS_TOKEN
+
+Returns:
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "LIBRARY_ID",
+      "name": "Late Night Songs",
+      "description": "Your personal listening space",
+      "songCount": 3,
+      "createdAt": "DATE",
+      "updatedAt": "DATE"
+    }
+  ]
+}
+
+GET /libraries/LIBRARY_ID/songs
+Authorization: Bearer ACCESS_TOKEN
+
+Returns an array of songs. A song with Cloudinary audio is ready to play
+when song.audio.status is "ready" and song.audio.url is present:
+
+{
+  "_id": "SONG_ID",
+  "library": "LIBRARY_ID",
+  "title": "Song title",
+  "youtubeUrl": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "youtubeVideoId": "VIDEO_ID",
+  "thumbnail": "IMAGE_URL",
+  "channelName": "Channel name",
+  "playCount": 0,
+  "audio": {
+    "url": "https://res.cloudinary.com/...",
+    "publicId": "nightwrapup/mp3/...",
+    "status": "ready",
+    "quality": "mp3",
+    "size": "4.36 MB",
+    "duration": 201,
+    "provider": "cloudinary"
+  },
+  "createdAt": "DATE",
+  "updatedAt": "DATE"
+}
+
+Use song.audio.url as the native audio source. Older songs may not have
+audio.url; show them as unavailable or use a separate fallback if desired.
+
+
+5. Playback count
+-----------------
+
+POST /libraries/LIBRARY_ID/songs/SONG_ID/play
+Authorization: Bearer ACCESS_TOKEN
+
+Call this once when the user starts playing a song. The response returns
+the updated song object.
+
+
+6. Optional library management
+------------------------------
+
+POST /libraries
+Authorization: Bearer ACCESS_TOKEN
+Content-Type: application/json
+
+Request:
+{
+  "name": "Workout",
+  "description": "Songs for training"
+}
+
+DELETE /libraries/LIBRARY_ID
+Authorization: Bearer ACCESS_TOKEN
+
+This deletes the library, its songs, and associated Cloudinary audio assets.
+
+DELETE /libraries/LIBRARY_ID/songs/SONG_ID
+Authorization: Bearer ACCESS_TOKEN
+
+This deletes one song and its associated Cloudinary audio asset.
+
+
+7. Error handling
+-----------------
+
+Every error normally has this shape:
+{
+  "success": false,
+  "message": "Readable error message"
+}
+
+401:
+- Access token expired or invalid: call /auth/mobile-refresh once.
+- Mobile refresh returns 401: clear mobile tokens and require login again.
+
+Do not retry a failed mobile login indefinitely. The mobile key can be
+revoked or regenerated from the website.
+
+
+8. Security requirements
+------------------------
+
+- Store accessToken and refreshToken in the platform secure storage
+  (Android Keystore-backed storage, iOS Keychain, or the framework equivalent).
+- Never store tokens in plain preferences or a normal unencrypted file.
+- Never log the secret key, access token, refresh token, cookies, or full
+  Cloudinary signed URLs.
+- Send requests only over HTTPS in production.
+- Replace the refresh token whenever /auth/mobile-refresh succeeds.
+- If the user taps logout, clear both mobile tokens locally.
+
+
+9. Backend endpoint summary
+---------------------------
+
+POST   /auth/mobile-login
+POST   /auth/mobile-refresh
+GET    /libraries
+GET    /libraries/:libraryId/songs
+POST   /libraries/:libraryId/songs/:songId/play
+POST   /libraries
+DELETE /libraries/:libraryId
+DELETE /libraries/:libraryId/songs/:songId
+
