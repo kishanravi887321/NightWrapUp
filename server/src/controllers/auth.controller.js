@@ -1,6 +1,5 @@
 import User from '../models/user.model.js';
 import { OAuth2Client } from 'google-auth-library';
-import { randomInt } from 'node:crypto';
 import env from '../config/env.js';
 import {
   createAccessToken,
@@ -245,7 +244,12 @@ export const createExtensionCredential = (request, response) => {
 
 export const createMobileSecretKey = async (request, response, next) => {
   try {
-    const secretKey = randomInt(10000000, 100000000).toString();
+    const secretKey = typeof request.body.secretKey === 'string' ? request.body.secretKey.trim() : '';
+    if (!/^\d{8}$/.test(secretKey)) {
+      const error = new Error('Mobile key must contain exactly 8 digits.');
+      error.statusCode = 400;
+      throw error;
+    }
     const user = await User.findById(request.user.id);
     if (!user) {
       const error = new Error('User not found.');

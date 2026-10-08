@@ -5,15 +5,16 @@ Production API base URL:
 https://apinightwrapup.ziax.online/api
 
 The mobile app does not use Firebase. A user must first sign in on the
-NightWrapUp website and create an 8-digit numeric mobile key in:
+NightWrapUp website and choose an 8-digit numeric mobile key in:
 
-Profile -> Mobile listening -> Create mobile key
+Profile -> Mobile listening -> Save mobile key
 
 The key is stored directly because it is designed as a recoverable mobile
 access code, not as the user's normal website password. The website Profile
 screen must be able to retrieve the current 8-digit code and display it when
 the user presses the eye button. This also lets the user copy the same code
-to the phone later without generating a replacement.
+to the phone later without generating a replacement. The server does not
+generate the key; the user chooses it.
 
 If the code were hashed, the server could verify a submitted value but could
 not recover the original value to display it. The only option would be to
@@ -23,12 +24,28 @@ small personal/fun project. It is not appropriate for a real password:
 production passwords should always be hashed and should never be recoverable
 or displayed.
 
-The mobile code is still limited to exactly 8 digits, can be regenerated,
+The mobile code is still limited to exactly 8 digits, can be changed by the user,
 and is removed when mobile access is revoked. Anyone with database access
 could read it, so keep the database and deployment credentials protected.
 
 
-1. Mobile login
+1. Choose or change the mobile key
+----------------
+
+POST /auth/mobile-key
+Content-Type: application/json
+
+Request:
+{
+  "secretKey": "48291637"
+}
+
+This website-only endpoint saves the user's chosen 8-digit key. It requires
+the website authentication cookie. Changing the key invalidates mobile
+refresh sessions.
+
+
+2. Mobile login
 ----------------
 
 POST /auth/mobile-login
@@ -67,7 +84,7 @@ by default. The server rotates the refresh token, so replace the stored
 refresh token after every successful mobile refresh.
 
 
-2. Refresh mobile session
+3. Refresh mobile session
 -------------------------
 
 POST /auth/mobile-refresh
@@ -86,7 +103,7 @@ data.user
 If this returns 401, send the user back to the mobile login screen.
 
 
-3. Authenticated requests
+4. Authenticated requests
 --------------------------
 
 Send the access token as a bearer token:
@@ -97,7 +114,7 @@ All user data is scoped to the authenticated user. Never send the mobile
 secret key with normal library or song requests.
 
 
-4. Libraries
+5. Libraries
 ------------
 
 GET /libraries
@@ -150,7 +167,7 @@ Use song.audio.url as the native audio source. Older songs may not have
 audio.url; show them as unavailable or use a separate fallback if desired.
 
 
-5. Playback count
+6. Playback count
 -----------------
 
 POST /libraries/LIBRARY_ID/songs/SONG_ID/play
@@ -160,7 +177,7 @@ Call this once when the user starts playing a song. The response returns
 the updated song object.
 
 
-6. Optional library management
+7. Optional library management
 ------------------------------
 
 POST /libraries
@@ -184,7 +201,7 @@ Authorization: Bearer ACCESS_TOKEN
 This deletes one song and its associated Cloudinary audio asset.
 
 
-7. Error handling
+8. Error handling
 -----------------
 
 Every error normally has this shape:
@@ -198,10 +215,10 @@ Every error normally has this shape:
 - Mobile refresh returns 401: clear mobile tokens and require login again.
 
 Do not retry a failed mobile login indefinitely. The mobile key can be
-revoked or regenerated from the website.
+revoked or changed from the website.
 
 
-8. Security requirements
+9. Security requirements
 ------------------------
 
 - Store accessToken and refreshToken in the platform secure storage
@@ -214,7 +231,7 @@ revoked or regenerated from the website.
 - If the user taps logout, clear both mobile tokens locally.
 
 
-9. Backend endpoint summary
+10. Backend endpoint summary
 ---------------------------
 
 POST   /auth/mobile-login

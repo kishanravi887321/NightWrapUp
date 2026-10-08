@@ -201,6 +201,28 @@ button {
   margin-top: 8px;
 }
 
+.mobile-key-form label {
+  width: 100%;
+  color: #cdd7f4;
+  font-size: 0.82rem;
+}
+
+.mobile-key-form input {
+  width: min(220px, 100%);
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.24);
+  letter-spacing: 0.18em;
+  outline: none;
+}
+
+.mobile-key-form input:focus {
+  border-color: rgba(129, 140, 248, 0.9);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+}
+
 .mobile-key-reveal code {
   min-width: 0;
   overflow-wrap: anywhere;

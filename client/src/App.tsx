@@ -47,6 +47,7 @@ function App() {
   const [error, setError] = useState('');
   const [activeView, setActiveView] = useState<'studio' | 'profile'>('studio');
   const [mobileSecretKey, setMobileSecretKey] = useState('');
+  const [mobileKeyInput, setMobileKeyInput] = useState('');
   const [showMobileSecretKey, setShowMobileSecretKey] = useState(true);
   const [mobileKeyBusy, setMobileKeyBusy] = useState(false);
 
@@ -212,11 +213,16 @@ function App() {
   };
 
   const handleCreateMobileKey = async () => {
+    if (!/^\d{8}$/.test(mobileKeyInput)) {
+      setError('Your mobile key must contain exactly 8 digits.');
+      return;
+    }
     setMobileKeyBusy(true);
     setError('');
     try {
-      const result = await createMobileSecretKey();
+      const result = await createMobileSecretKey(mobileKeyInput);
       setMobileSecretKey(result.secretKey);
+      setMobileKeyInput('');
       setShowMobileSecretKey(true);
       setSession((current) =>
         current
@@ -232,7 +238,7 @@ function App() {
           : current,
       );
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to create the mobile key.');
+      setError(requestError instanceof Error ? requestError.message : 'Unable to save the mobile key.');
     } finally {
       setMobileKeyBusy(false);
     }
@@ -314,7 +320,7 @@ function App() {
               <span className="eyebrow">Mobile listening</span>
               <h2>Connect your phone</h2>
               <p>
-                Create a mobile secret key here, then use it with your email in the listening app. Your key is shown only once.
+                Choose an 8-digit mobile key here, then use it with your email in the listening app.
               </p>
               {mobileSecretKey ? (
                 <div className="mobile-key-reveal">
@@ -333,9 +339,21 @@ function App() {
                   <button className="secondary-btn" type="button" onClick={copyMobileKey}>Copy key</button>
                 </div>
               ) : (
-                <div className="mobile-access-actions">
+                <div className="mobile-access-actions mobile-key-form">
+                  <label htmlFor="mobile-key-input">Choose an 8-digit key</label>
+                  <input
+                    id="mobile-key-input"
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]{8}"
+                    maxLength={8}
+                    value={mobileKeyInput}
+                    onChange={(event) => setMobileKeyInput(event.target.value.replace(/\D/g, '').slice(0, 8))}
+                    placeholder="00000000"
+                    autoComplete="new-password"
+                  />
                   <button className="primary-btn" type="button" onClick={handleCreateMobileKey} disabled={mobileKeyBusy}>
-                    {mobileKeyBusy ? 'Creating…' : session.user.mobileAccessEnabled ? 'Regenerate mobile key' : 'Create mobile key'}
+                    {mobileKeyBusy ? 'Saving…' : session.user.mobileAccessEnabled ? 'Change mobile key' : 'Save mobile key'}
                   </button>
                   {session.user.mobileAccessEnabled && (
                     <button className="danger-btn" type="button" onClick={handleRevokeMobileKey} disabled={mobileKeyBusy}>

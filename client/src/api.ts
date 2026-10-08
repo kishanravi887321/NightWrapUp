@@ -100,8 +100,11 @@ export const logout = () => request<void>('/auth/logout', { method: 'POST' });
 export const createExtensionToken = () =>
   request<{ extensionToken: string }>('/auth/extension-token', { method: 'POST' });
 
-export const createMobileSecretKey = () =>
-  request<{ secretKey: string; createdAt: string }>('/auth/mobile-key', { method: 'POST' });
+export const createMobileSecretKey = (secretKey: string) =>
+  request<{ secretKey: string; createdAt: string }>('/auth/mobile-key', {
+    method: 'POST',
+    body: JSON.stringify({ secretKey }),
+  });
 
 export const revokeMobileSecretKey = () =>
   request<void>('/auth/mobile-key', { method: 'DELETE' });
