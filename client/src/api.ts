@@ -65,13 +65,7 @@ const request = async <T>(path: string, options?: RequestInit, allowRefresh = tr
   });
   const body = await response.json().catch(() => ({}));
   if (response.status === 401 && allowRefresh && path !== '/auth/refresh' && path !== '/auth/google') {
-    if (!refreshRequest) {
-      refreshRequest = request<AuthSession>('/auth/refresh', { method: 'POST' }, false)
-        .finally(() => {
-          refreshRequest = null;
-        });
-    }
-    await refreshRequest;
+    await refreshSession();
     return request<T>(path, options, false);
   }
   if (!response.ok) {
@@ -80,13 +74,23 @@ const request = async <T>(path: string, options?: RequestInit, allowRefresh = tr
   return body.data as T;
 };
 
+const refreshSession = () => {
+  if (!refreshRequest) {
+    refreshRequest = request<AuthSession>('/auth/refresh', { method: 'POST' }, false)
+      .finally(() => {
+        refreshRequest = null;
+      });
+  }
+  return refreshRequest;
+};
+
 export const googleAuth = (credential: string) =>
   request<AuthSession>('/auth/google', {
     method: 'POST',
     body: JSON.stringify({ credential }),
   });
 
-export const refresh = () => request<AuthSession>('/auth/refresh', { method: 'POST' });
+export const refresh = () => refreshSession();
 
 export const logout = () => request<void>('/auth/logout', { method: 'POST' });
 

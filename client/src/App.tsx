@@ -81,7 +81,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || checkingSession) return;
     setLoadingLibraries(true);
     listLibraries()
       .then((nextLibraries) => {
@@ -90,7 +90,7 @@ function App() {
       })
       .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Unable to load libraries.'))
       .finally(() => setLoadingLibraries(false));
-  }, [session]);
+  }, [session, checkingSession]);
 
   useEffect(() => {
     if (!selectedId) {
