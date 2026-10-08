@@ -19,6 +19,7 @@ export const downloadMp3 = async (youtubeUrl) => {
     error.statusCode = 400;
     throw error;
   }
+  console.info('[mp3] Starting media preparation', { videoId });
 
   const info = await requestInfo(videoId);
   const audio = info.audios?.[0];
@@ -27,8 +28,20 @@ export const downloadMp3 = async (youtubeUrl) => {
     error.statusCode = 422;
     throw error;
   }
+  console.info('[mp3] Audio format found', {
+    videoId,
+    audioId: audio.id,
+    quality: audio.quality,
+    size: audio.size,
+  });
 
   const completed = await waitForAudio(audio.id);
+  console.info('[mp3] Media processing complete', {
+    videoId,
+    audioId: audio.id,
+    quality: completed.quality,
+    size: completed.size,
+  });
   const downloadUrl = validateDownloadUrl(completed.url);
   await mkdir(serviceDirectory, { recursive: true });
 
@@ -39,6 +52,7 @@ export const downloadMp3 = async (youtubeUrl) => {
   try {
     await downloadFile(downloadUrl, temporaryPath);
     await rename(temporaryPath, targetPath);
+    console.info('[mp3] MP3 downloaded locally', { videoId, filename });
   } catch (error) {
     await unlink(temporaryPath).catch(() => undefined);
     throw error;
@@ -48,6 +62,11 @@ export const downloadMp3 = async (youtubeUrl) => {
     targetPath,
     `nightwrapup/mp3/${filename.replace(/\.mp3$/i, '')}`,
   );
+  console.info('[mp3] MP3 uploaded to Cloudinary', {
+    videoId,
+    publicId: cloudinaryAsset.public_id,
+    secureUrl: cloudinaryAsset.secure_url,
+  });
   await unlink(targetPath).catch((error) => {
     console.warn('Cloudinary upload succeeded, but local MP3 cleanup failed.', error.message);
   });
@@ -73,6 +92,11 @@ async function requestInfo(videoId) {
   });
   const data = await readJson(response, 'Unable to read media information.');
   if (!data.ok) throw serviceError('The media service could not process this video.', 502);
+  console.info('[mp3] Media information received', {
+    videoId,
+    title: data.title,
+    audioCount: data.audios?.length || 0,
+  });
   return data;
 }
 

@@ -42,6 +42,19 @@ const songSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    audio: {
+      url: { type: String, trim: true },
+      publicId: { type: String, trim: true },
+      status: {
+        type: String,
+        enum: ['pending', 'ready', 'failed'],
+        default: 'pending',
+      },
+      quality: { type: String, trim: true },
+      size: { type: String, trim: true },
+      duration: { type: Number, min: 0 },
+      provider: { type: String, trim: true, default: 'cloudinary' },
+    },
   },
   {
     timestamps: true,

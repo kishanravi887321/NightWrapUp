@@ -30,6 +30,12 @@ export const uploadMp3 = (filePath, publicId) => {
           reject(error);
           return;
         }
+        console.info('[cloudinary] MP3 upload successful', {
+          publicId: result.public_id,
+          secureUrl: result.secure_url,
+          bytes: result.bytes,
+          duration: result.duration,
+        });
         resolve(result);
       },
     );
