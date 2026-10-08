@@ -34,9 +34,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
-    mobileSecretKeyHash: {
+    // Stored directly so the website can display the existing mobile key.
+    mobileSecretKey: {
       type: String,
-      select: false,
+      match: [/^\d{8}$/, 'Mobile key must contain exactly 8 digits'],
     },
     mobileSecretKeyCreatedAt: {
       type: Date,
@@ -59,6 +60,7 @@ userSchema.methods.toSafeJSON = function toSafeJSON() {
     mobileSecretKeyCreatedAt: this.mobileSecretKeyCreatedAt,
     mobileSecretKeyLastUsedAt: this.mobileSecretKeyLastUsedAt,
     mobileAccessEnabled: Boolean(this.mobileSecretKeyCreatedAt),
+    mobileSecretKey: this.mobileSecretKey,
   };
 };
 

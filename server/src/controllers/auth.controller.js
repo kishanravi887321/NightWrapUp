@@ -192,8 +192,8 @@ export const mobileLogin = async (request, response, next) => {
       throw error;
     }
 
-    const user = await User.findOne({ email }).select('+mobileSecretKeyHash +mobileRefreshTokenHash');
-    if (!user || !user.mobileSecretKeyHash || user.mobileSecretKeyHash !== hashJwt(secretKey)) {
+    const user = await User.findOne({ email }).select('+mobileRefreshTokenHash');
+    if (!user || !user.mobileSecretKey || user.mobileSecretKey !== secretKey) {
       const error = new Error('Invalid email or mobile key.');
       error.statusCode = 401;
       throw error;
@@ -246,14 +246,14 @@ export const createExtensionCredential = (request, response) => {
 export const createMobileSecretKey = async (request, response, next) => {
   try {
     const secretKey = randomInt(10000000, 100000000).toString();
-    const user = await User.findById(request.user.id).select('+mobileSecretKeyHash');
+    const user = await User.findById(request.user.id);
     if (!user) {
       const error = new Error('User not found.');
       error.statusCode = 404;
       throw error;
     }
 
-    user.mobileSecretKeyHash = hashJwt(secretKey);
+    user.mobileSecretKey = secretKey;
     user.mobileSecretKeyCreatedAt = new Date();
     user.mobileSecretKeyLastUsedAt = undefined;
     user.mobileRefreshTokenHash = undefined;
@@ -277,7 +277,7 @@ export const revokeMobileSecretKey = async (request, response, next) => {
       request.user.id,
       {
         $unset: {
-          mobileSecretKeyHash: 1,
+          mobileSecretKey: 1,
           mobileSecretKeyCreatedAt: 1,
           mobileSecretKeyLastUsedAt: 1,
           mobileRefreshTokenHash: 1,

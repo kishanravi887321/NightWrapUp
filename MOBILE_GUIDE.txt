@@ -9,8 +9,10 @@ NightWrapUp website and create an 8-digit numeric mobile key in:
 
 Profile -> Mobile listening -> Create mobile key
 
-The key is displayed only once. It is stored on the server as a hash.
-If the user loses it, they must regenerate it on the website.
+The key is stored directly so the website can display it later. If this
+were hashed, the original key could not be recovered and displayed to the
+user. This is intentionally simplified for this fun project; do not reuse
+this storage approach for a production password system.
 
 
 1. Mobile login
@@ -37,6 +39,7 @@ Success response:
       "createdAt": "DATE",
       "updatedAt": "DATE",
       "mobileAccessEnabled": true,
+      "mobileSecretKey": "48291637",
       "mobileSecretKeyCreatedAt": "DATE",
       "mobileSecretKeyLastUsedAt": "DATE"
     },
@@ -209,4 +212,3 @@ POST   /libraries/:libraryId/songs/:songId/play
 POST   /libraries
 DELETE /libraries/:libraryId
 DELETE /libraries/:libraryId/songs/:songId
-
