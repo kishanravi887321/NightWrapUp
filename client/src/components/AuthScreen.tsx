@@ -43,7 +43,7 @@ export default function AuthScreen({ onAuthenticated, sessionError }: Props) {
           <p>New accounts are created automatically. Existing accounts are signed in instantly.</p>
         </div>
         <div className="google-login">
-          <GoogleLogin onSuccess={(response) => handleSuccess(response.credential)} onError={() => setError('Google sign-in was cancelled or failed.')} useOneTap theme="filled_black" shape="pill" size="large" width="320" />
+          <GoogleLogin onSuccess={(response) => handleSuccess(response.credential)} onError={() => setError('Google sign-in was cancelled or failed.')} useOneTap theme="filled_black" shape="pill" size="large" width="100%" />
         </div>
         {busy && <div className="auth-status">Opening your space…</div>}
         {sessionError && <div className="form-error">{sessionError}</div>}

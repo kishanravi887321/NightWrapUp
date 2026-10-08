@@ -2,6 +2,8 @@ const API_URL = import.meta.env.PROD
   ? 'https://apinightwrapup.ziax.online/api'
   : 'http://localhost:5000/api';
 
+let refreshRequest: Promise<AuthSession> | null = null;
+
 export class ApiError extends Error {
   status: number;
 
@@ -63,7 +65,13 @@ const request = async <T>(path: string, options?: RequestInit, allowRefresh = tr
   });
   const body = await response.json().catch(() => ({}));
   if (response.status === 401 && allowRefresh && path !== '/auth/refresh' && path !== '/auth/google') {
-    await request('/auth/refresh', { method: 'POST' }, false);
+    if (!refreshRequest) {
+      refreshRequest = request<AuthSession>('/auth/refresh', { method: 'POST' }, false)
+        .finally(() => {
+          refreshRequest = null;
+        });
+    }
+    await refreshRequest;
     return request<T>(path, options, false);
   }
   if (!response.ok) {
