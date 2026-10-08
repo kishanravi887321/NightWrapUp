@@ -21,6 +21,7 @@ export type AuthUser = {
   updatedAt: string;
   mobileSecretKeyCreatedAt?: string;
   mobileSecretKeyLastUsedAt?: string;
+  mobileSecretKey?: string;
   mobileAccessEnabled?: boolean;
 };
 
@@ -106,7 +107,7 @@ export const createMobileSecretKey = (secretKey: string) =>
     body: JSON.stringify({ secretKey }),
   });
 
-export const revokeMobileSecretKey = () =>
+export const deleteMobileSecretKey = () =>
   request<void>('/auth/mobile-key', { method: 'DELETE' });
 
 export const listLibraries = () => request<Library[]>('/libraries');

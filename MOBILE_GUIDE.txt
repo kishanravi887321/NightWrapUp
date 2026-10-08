@@ -25,7 +25,7 @@ production passwords should always be hashed and should never be recoverable
 or displayed.
 
 The mobile code is still limited to exactly 8 digits, can be changed by the user,
-and is removed when mobile access is revoked. Anyone with database access
+and is removed when the user deletes it. Anyone with database access
 could read it, so keep the database and deployment credentials protected.
 
 
@@ -215,7 +215,7 @@ Every error normally has this shape:
 - Mobile refresh returns 401: clear mobile tokens and require login again.
 
 Do not retry a failed mobile login indefinitely. The mobile key can be
-revoked or changed from the website.
+deleted or changed from the website.
 
 
 9. Security requirements

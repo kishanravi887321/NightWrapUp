@@ -10,7 +10,7 @@ import {
   listLibraries,
   listLibrarySongs,
   createMobileSecretKey,
-  revokeMobileSecretKey,
+  deleteMobileSecretKey,
   logout,
   recordSongPlay,
   refresh,
@@ -48,7 +48,7 @@ function App() {
   const [activeView, setActiveView] = useState<'studio' | 'profile'>('studio');
   const [mobileSecretKey, setMobileSecretKey] = useState('');
   const [mobileKeyInput, setMobileKeyInput] = useState('');
-  const [showMobileSecretKey, setShowMobileSecretKey] = useState(true);
+  const [showMobileSecretKey, setShowMobileSecretKey] = useState(false);
   const [mobileKeyBusy, setMobileKeyBusy] = useState(false);
 
   useEffect(() => {
@@ -64,6 +64,8 @@ function App() {
         if (renewed.extensionToken) {
           localStorage.setItem('nightwrapup_extension_token', renewed.extensionToken);
         }
+        setMobileSecretKey(renewed.user.mobileSecretKey || '');
+        setShowMobileSecretKey(false);
         setSession(renewed);
       } catch (requestError) {
         if (requestError instanceof ApiError && requestError.status === 401) {
@@ -202,6 +204,8 @@ function App() {
     if (nextSession.extensionToken) {
       localStorage.setItem('nightwrapup_extension_token', nextSession.extensionToken);
     }
+    setMobileSecretKey(nextSession.user.mobileSecretKey || '');
+    setShowMobileSecretKey(false);
     setSession(nextSession);
   };
 
@@ -231,6 +235,7 @@ function App() {
               user: {
                 ...current.user,
                 mobileAccessEnabled: true,
+                mobileSecretKey: result.secretKey,
                 mobileSecretKeyCreatedAt: result.createdAt,
                 mobileSecretKeyLastUsedAt: undefined,
               },
@@ -244,12 +249,12 @@ function App() {
     }
   };
 
-  const handleRevokeMobileKey = async () => {
-    if (!window.confirm('Revoke mobile access? The current key will stop working immediately.')) return;
+  const handleDeleteMobileKey = async () => {
+    if (!window.confirm('Delete your mobile key? Mobile login will stop working immediately.')) return;
     setMobileKeyBusy(true);
     setError('');
     try {
-      await revokeMobileSecretKey();
+      await deleteMobileSecretKey();
       setMobileSecretKey('');
       setShowMobileSecretKey(false);
       setSession((current) =>
@@ -259,6 +264,7 @@ function App() {
               user: {
                 ...current.user,
                 mobileAccessEnabled: false,
+                mobileSecretKey: undefined,
                 mobileSecretKeyCreatedAt: undefined,
                 mobileSecretKeyLastUsedAt: undefined,
               },
@@ -266,7 +272,7 @@ function App() {
           : current,
       );
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to revoke mobile access.');
+      setError(requestError instanceof Error ? requestError.message : 'Unable to delete the mobile key.');
     } finally {
       setMobileKeyBusy(false);
     }
@@ -337,6 +343,9 @@ function App() {
                     {showMobileSecretKey ? '◉' : '◎'}
                   </button>
                   <button className="secondary-btn" type="button" onClick={copyMobileKey}>Copy key</button>
+                  <button className="danger-btn" type="button" onClick={handleDeleteMobileKey} disabled={mobileKeyBusy}>
+                    Delete key
+                  </button>
                 </div>
               ) : (
                 <div className="mobile-access-actions mobile-key-form">
@@ -355,11 +364,6 @@ function App() {
                   <button className="primary-btn" type="button" onClick={handleCreateMobileKey} disabled={mobileKeyBusy}>
                     {mobileKeyBusy ? 'Saving…' : session.user.mobileAccessEnabled ? 'Change mobile key' : 'Save mobile key'}
                   </button>
-                  {session.user.mobileAccessEnabled && (
-                    <button className="danger-btn" type="button" onClick={handleRevokeMobileKey} disabled={mobileKeyBusy}>
-                      Revoke access
-                    </button>
-                  )}
                 </div>
               )}
               {session.user.mobileSecretKeyCreatedAt && (
