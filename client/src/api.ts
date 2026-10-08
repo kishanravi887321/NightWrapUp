@@ -45,13 +45,17 @@ export type Song = {
   updatedAt: string;
 };
 
-const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
+const request = async <T>(path: string, options?: RequestInit, allowRefresh = true): Promise<T> => {
   const response = await fetch(`${API_URL}${path}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
   });
   const body = await response.json().catch(() => ({}));
+  if (response.status === 401 && allowRefresh && path !== '/auth/refresh' && path !== '/auth/google') {
+    await request('/auth/refresh', { method: 'POST' }, false);
+    return request<T>(path, options, false);
+  }
   if (!response.ok) {
     throw new ApiError(body.message ?? 'Something went wrong. Please try again.', response.status);
   }

@@ -82,9 +82,14 @@ type YouTubePlayerProps = {
 
 function YouTubePlayer({ videoId, onEnded }: YouTubePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const onEndedRef = useRef(onEnded);
 
   useEffect(() => {
-    let player: { destroy: () => void } | undefined;
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
+
+  useEffect(() => {
+    let player: { destroy: () => void; playVideo?: () => void } | undefined;
     let cancelled = false;
     const createPlayer = () => {
       if (cancelled || !containerRef.current) return;
@@ -92,14 +97,20 @@ function YouTubePlayer({ videoId, onEnded }: YouTubePlayerProps) {
         YT?: { Player: new (element: HTMLDivElement, options: {
           videoId: string;
           playerVars: Record<string, number>;
-          events: { onStateChange: (event: { data: number }) => void };
-        }) => { destroy: () => void } };
+          events: {
+            onReady: (event: { target: { playVideo: () => void } }) => void;
+            onStateChange: (event: { data: number }) => void;
+          };
+        }) => { destroy: () => void; playVideo?: () => void } };
       }).YT;
       if (!youtube) return;
       player = new youtube.Player(containerRef.current, {
         videoId,
         playerVars: { autoplay: 1, controls: 0, playsinline: 1, rel: 0 },
-        events: { onStateChange: (event) => event.data === 0 && onEnded() },
+        events: {
+          onReady: (event) => event.target.playVideo(),
+          onStateChange: (event) => event.data === 0 && onEndedRef.current(),
+        },
       });
     };
 
@@ -122,7 +133,7 @@ function YouTubePlayer({ videoId, onEnded }: YouTubePlayerProps) {
       cancelled = true;
       player?.destroy();
     };
-  }, [videoId, onEnded]);
+  }, [videoId]);
 
   return <div ref={containerRef} className="audio-player" aria-hidden="true" />;
 }
