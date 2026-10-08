@@ -35,6 +35,7 @@ const clearAuthCookies = (response) => {
   const cookiePaths = [
     ['accessToken', '/'],
     ['refreshToken', '/api/auth'],
+    ['refreshToken', '/'],
   ];
 
   cookiePaths.forEach(([name, path]) => {
@@ -48,6 +49,7 @@ const clearAuthCookies = (response) => {
 const clearLegacyHostCookies = (response) => {
   response.clearCookie('accessToken', { path: '/' });
   response.clearCookie('refreshToken', { path: '/api/auth' });
+  response.clearCookie('refreshToken', { path: '/' });
 };
 
 const issueTokens = async (user) => {
@@ -70,7 +72,7 @@ const sendAuthResponse = (response, user, tokens) => {
   response.cookie(
     'refreshToken',
     tokens.refreshToken,
-    cookieOptions(durationToMilliseconds(env.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000), '/api/auth'),
+    cookieOptions(durationToMilliseconds(env.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000), '/'),
   );
   response.status(200).json({
   success: true,
