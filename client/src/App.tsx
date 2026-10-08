@@ -49,6 +49,7 @@ function App() {
   const [mobileSecretKey, setMobileSecretKey] = useState('');
   const [mobileKeyInput, setMobileKeyInput] = useState('');
   const [showMobileSecretKey, setShowMobileSecretKey] = useState(false);
+  const [mobileKeyMenuOpen, setMobileKeyMenuOpen] = useState(false);
   const [mobileKeyBusy, setMobileKeyBusy] = useState(false);
 
   useEffect(() => {
@@ -228,6 +229,7 @@ function App() {
       setMobileSecretKey(result.secretKey);
       setMobileKeyInput('');
       setShowMobileSecretKey(true);
+      setMobileKeyMenuOpen(false);
       setSession((current) =>
         current
           ? {
@@ -257,6 +259,7 @@ function App() {
       await deleteMobileSecretKey();
       setMobileSecretKey('');
       setShowMobileSecretKey(false);
+      setMobileKeyMenuOpen(false);
       setSession((current) =>
         current
           ? {
@@ -342,10 +345,30 @@ function App() {
                   >
                     {showMobileSecretKey ? '◉' : '◎'}
                   </button>
-                  <button className="secondary-btn" type="button" onClick={copyMobileKey}>Copy key</button>
-                  <button className="danger-btn" type="button" onClick={handleDeleteMobileKey} disabled={mobileKeyBusy}>
-                    Delete key
-                  </button>
+                  <div className="mobile-key-menu">
+                    <button
+                      className="secondary-btn mobile-key-more"
+                      type="button"
+                      onClick={() => setMobileKeyMenuOpen((open) => !open)}
+                      aria-label="More mobile key actions"
+                      aria-expanded={mobileKeyMenuOpen}
+                      title="More actions"
+                    >
+                      ⋯
+                    </button>
+                    {mobileKeyMenuOpen && (
+                      <div className="mobile-key-menu-popover" role="menu">
+                        <button type="button" role="menuitem" onClick={copyMobileKey}>Copy key</button>
+                        <button type="button" role="menuitem" onClick={() => {
+                          setShowMobileSecretKey(false);
+                          setMobileKeyMenuOpen(false);
+                        }}>Hide key</button>
+                        <button type="button" role="menuitem" className="mobile-key-delete-action" onClick={handleDeleteMobileKey} disabled={mobileKeyBusy}>
+                          Delete key
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="mobile-access-actions mobile-key-form">
@@ -373,14 +396,6 @@ function App() {
                     ? ` · Last used ${new Date(session.user.mobileSecretKeyLastUsedAt).toLocaleDateString()}`
                     : ' · Not used yet'}
                 </small>
-              )}
-              {mobileSecretKey && (
-                <button className="ghost-btn mobile-key-dismiss" type="button" onClick={() => {
-                  setMobileSecretKey('');
-                  setShowMobileSecretKey(false);
-                }}>
-                  Hide key
-                </button>
               )}
             </section>
             <button className="profile-logout profile-page-logout" type="button" onClick={handleLogout}>Log out</button>
