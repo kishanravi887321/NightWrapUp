@@ -139,12 +139,16 @@ function App() {
   };
 
   const playNextSong = () => {
-    if (playingIndex >= 0 && playingIndex + 1 < songs.length) {
-      playSong(playingIndex + 1);
+    if (songs.length === 0) {
+      setPlayingSongId('');
+      setPlayingIndex(-1);
       return;
     }
-    setPlayingSongId('');
-    setPlayingIndex(-1);
+    if (playingIndex >= 0) {
+      playSong((playingIndex + 1) % songs.length);
+      return;
+    }
+    playSong(0);
     playerRef.current = null;
     setCurrentTime(0);
     setDuration(0);
@@ -347,7 +351,7 @@ function App() {
                     volume={volume}
                     paused={isPaused}
                     canGoPrevious={playingIndex > 0}
-                    canGoNext={playingIndex + 1 < songs.length}
+                    canGoNext={songs.length > 1}
                     onToggle={() => {
                       if (isPaused) {
                         playerRef.current?.playVideo();
@@ -357,7 +361,7 @@ function App() {
                       setIsPaused((current) => !current);
                     }}
                     onPrevious={() => playingIndex > 0 && playSong(playingIndex - 1)}
-                    onNext={() => playingIndex + 1 < songs.length && playSong(playingIndex + 1)}
+                    onNext={() => songs.length > 1 && playSong((playingIndex + 1) % songs.length)}
                     onSeek={(value) => {
                       playerRef.current?.seekTo(value, true);
                       setCurrentTime(value);
