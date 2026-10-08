@@ -9,6 +9,9 @@ const jwtAccessSecret = process.env.JWT_ACCESS_SECRET;
 const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
 const jwtExtensionSecret = process.env.JWT_EXTENSION_SECRET;
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME;
+const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
+const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
 
 if (!jwtAccessSecret || !jwtRefreshSecret || !jwtExtensionSecret || !googleClientId) {
   throw new Error('JWT secrets and GOOGLE_CLIENT_ID are required in the environment.');
@@ -21,6 +24,9 @@ export default {
   jwtRefreshSecret,
   jwtExtensionSecret,
   googleClientId,
+  cloudinaryCloudName,
+  cloudinaryApiKey,
+  cloudinaryApiSecret,
   accessTokenExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
   refreshTokenExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   extensionTokenExpiresIn: process.env.JWT_EXTENSION_EXPIRES_IN || '365d',
