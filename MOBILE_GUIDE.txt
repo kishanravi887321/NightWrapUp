@@ -9,10 +9,23 @@ NightWrapUp website and create an 8-digit numeric mobile key in:
 
 Profile -> Mobile listening -> Create mobile key
 
-The key is stored directly so the website can display it later. If this
-were hashed, the original key could not be recovered and displayed to the
-user. This is intentionally simplified for this fun project; do not reuse
-this storage approach for a production password system.
+The key is stored directly because it is designed as a recoverable mobile
+access code, not as the user's normal website password. The website Profile
+screen must be able to retrieve the current 8-digit code and display it when
+the user presses the eye button. This also lets the user copy the same code
+to the phone later without generating a replacement.
+
+If the code were hashed, the server could verify a submitted value but could
+not recover the original value to display it. The only option would be to
+force the user to regenerate a new code whenever they forgot or hid the old
+one. Direct storage is therefore a deliberate convenience tradeoff for this
+small personal/fun project. It is not appropriate for a real password:
+production passwords should always be hashed and should never be recoverable
+or displayed.
+
+The mobile code is still limited to exactly 8 digits, can be regenerated,
+and is removed when mobile access is revoked. Anyone with database access
+could read it, so keep the database and deployment credentials protected.
 
 
 1. Mobile login
