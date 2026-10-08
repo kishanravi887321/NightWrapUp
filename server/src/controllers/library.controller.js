@@ -112,3 +112,25 @@ export const deleteLibrary = async (request, response, next) => {
     next(error);
   }
 };
+
+export const recordSongPlay = async (request, response, next) => {
+  try {
+    const song = await Song.findOneAndUpdate(
+      {
+        _id: request.params.songId,
+        library: request.params.libraryId,
+        user: request.user.id,
+      },
+      { $inc: { playCount: 1 } },
+      { new: true },
+    ).lean();
+    if (!song) {
+      const error = new Error('Song not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+    response.json({ success: true, data: song });
+  } catch (error) {
+    next(error);
+  }
+};

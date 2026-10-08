@@ -37,6 +37,11 @@ const songSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    playCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,
