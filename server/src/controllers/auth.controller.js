@@ -1,6 +1,6 @@
 import User from '../models/user.model.js';
 import { OAuth2Client } from 'google-auth-library';
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import env from '../config/env.js';
 import {
   createAccessToken,
@@ -68,12 +68,12 @@ const sendAuthResponse = (response, user, tokens) => {
   response.cookie(
     'accessToken',
     tokens.accessToken,
-    cookieOptions(durationToMilliseconds(env.accessTokenExpiresIn, 15 * 60 * 1000), '/'),
+    cookieOptions(durationToMilliseconds(env.accessTokenExpiresIn, 15 * 24 * 60 * 60 * 1000), '/'),
   );
   response.cookie(
     'refreshToken',
     tokens.refreshToken,
-    cookieOptions(durationToMilliseconds(env.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000), '/'),
+    cookieOptions(durationToMilliseconds(env.refreshTokenExpiresIn, 30 * 24 * 60 * 60 * 1000), '/'),
   );
   response.status(200).json({
   success: true,
@@ -172,7 +172,7 @@ export const createExtensionCredential = (request, response) => {
 
 export const createMobileSecretKey = async (request, response, next) => {
   try {
-    const secretKey = `nw_${randomBytes(24).toString('base64url')}`;
+    const secretKey = randomInt(10000000, 100000000).toString();
     const user = await User.findById(request.user.id).select('+mobileSecretKeyHash');
     if (!user) {
       const error = new Error('User not found.');
