@@ -238,17 +238,6 @@ function App() {
           </section>
         ) : (
         <>
-        <section className="hero glass-card">
-          <div className="hero-copy">
-            <span className="eyebrow">NightWrapUp / Playlist Studio</span>
-            <h1>Create a beautiful home for your YouTube Music links.</h1>
-            <p>
-              Add, preview, and organize the URLs you plan to save in your database later.
-              Start with a smooth, premium interface your users will actually enjoy using.
-            </p>
-          </div>
-        </section>
-
         <section className="content-grid">
           <aside className="glass-card sidebar">
             <div className="section-heading">
