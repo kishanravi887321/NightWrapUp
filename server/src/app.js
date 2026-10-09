@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.routes.js';
 import libraryRoutes from './routes/library.routes.js';
 import extensionRoutes from './routes/extension.routes.js';
 import mediaRoutes from './routes/media.routes.js';
+import mobileRoutes from './routes/mobile.routes.js';
 import errorHandler from './middlewares/error-handler.js';
 import notFound from './middlewares/not-found.js';
 import env from './config/env.js';
@@ -52,6 +53,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/libraries', libraryRoutes);
 app.use('/api/extension', extensionRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/mobile', mobileRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
