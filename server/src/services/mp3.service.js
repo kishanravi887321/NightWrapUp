@@ -54,7 +54,7 @@ export const downloadMp3 = async (youtubeUrl) => {
 
     const cloudinaryAsset = await uploadMp3(
       targetPath,
-      `nightwrapup/mp3/${videoId}`,
+      `nightwrapup/mp3/${filename.replace(/\.mp3$/i, '')}`,
     );
     console.info('[mp3] MP3 uploaded to Cloudinary', {
       videoId,
@@ -164,7 +164,7 @@ function extractYouTubeVideoId(value) {
 
 function sanitizeFilename(value) {
   return basename(value)
-    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '')
+    .replace(/[<>:"/\\|?*#%&\u0000-\u001F]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 100) || 'audio';
