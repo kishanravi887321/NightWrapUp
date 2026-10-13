@@ -200,6 +200,23 @@ Authorization: Bearer ACCESS_TOKEN
 
 This deletes one song and its associated Cloudinary audio asset.
 
+DELETE /mobile/songs/SONG_ID
+DELETE /mobile/songs (with JSON body: { "songId": "SONG_ID" })
+Authorization: Bearer ACCESS_TOKEN
+
+Deletes the song and its associated Cloudinary audio asset via the mobile route.
+Success response:
+{
+  "success": true,
+  "message": "Song deleted successfully.",
+  "data": {
+    "songId": "SONG_ID",
+    "libraryId": "LIBRARY_ID",
+    "title": "Song title",
+    "cloudinaryDeleted": true
+  }
+}
+
 
 8. Error handling
 -----------------
@@ -242,6 +259,9 @@ POST   /libraries/:libraryId/songs/:songId/play
 POST   /libraries
 DELETE /libraries/:libraryId
 DELETE /libraries/:libraryId/songs/:songId
+DELETE /mobile/songs/:songId
+DELETE /mobile/songs
+POST   /mobile/songs/delete
 
 
 11. Recommended Expo project structure

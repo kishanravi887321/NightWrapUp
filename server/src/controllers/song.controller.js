@@ -1,6 +1,8 @@
+import mongoose from 'mongoose';
 import Library from '../models/library.model.js';
 import Song from '../models/song.model.js';
 import { downloadMp3 } from '../services/mp3.service.js';
+import { deleteMp3, extractCloudinaryPublicId } from '../services/cloudinary.service.js';
 
 export const saveSong = async (request, response, next) => {
   try {
@@ -140,3 +142,76 @@ function extractYouTubeVideoId(value) {
     return null;
   }
 }
+
+export const deleteSong = async (request, response, next) => {
+  try {
+    const songId = request.params.songId || request.body?.songId || request.query?.songId;
+    const libraryId = request.params.libraryId || request.body?.libraryId || request.query?.libraryId;
+
+    if (!songId) {
+      const error = new Error('Song ID is required.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(songId)) {
+      const error = new Error('Invalid song ID format.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const query = {
+      _id: songId,
+      user: request.user.id,
+    };
+
+    if (libraryId) {
+      if (!mongoose.Types.ObjectId.isValid(libraryId)) {
+        const error = new Error('Invalid library ID format.');
+        error.statusCode = 400;
+        throw error;
+      }
+      query.library = libraryId;
+    }
+
+    const song = await Song.findOneAndDelete(query);
+    if (!song) {
+      const error = new Error('Song not found or unauthorized.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const publicId = song.audio?.publicId || extractCloudinaryPublicId(song.audio?.url);
+    let cloudinaryDeleted = false;
+
+    if (publicId) {
+      try {
+        await deleteMp3(publicId);
+        cloudinaryDeleted = true;
+        console.info('[song-delete] Cloudinary asset deleted', {
+          songId: song._id.toString(),
+          publicId,
+        });
+      } catch (cloudinaryError) {
+        console.error('[song-delete] Failed to delete Cloudinary asset', {
+          songId: song._id.toString(),
+          publicId,
+          error: cloudinaryError.message,
+        });
+      }
+    }
+
+    response.status(200).json({
+      success: true,
+      message: 'Song deleted successfully.',
+      data: {
+        songId: song._id,
+        libraryId: song.library,
+        title: song.title,
+        cloudinaryDeleted,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

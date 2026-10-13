@@ -44,11 +44,29 @@ export const uploadMp3 = (filePath, publicId) => {
   });
 };
 
+export const extractCloudinaryPublicId = (url) => {
+  if (typeof url !== 'string' || !url.includes('cloudinary.com')) return null;
+  try {
+    const parsed = new URL(url);
+    const uploadIndex = parsed.pathname.indexOf('/upload/');
+    if (uploadIndex === -1) return null;
+    let pathAfterUpload = parsed.pathname.slice(uploadIndex + '/upload/'.length);
+    pathAfterUpload = pathAfterUpload.replace(/^v\d+\//, '');
+    pathAfterUpload = pathAfterUpload.replace(/\.[^/.]+$/, '');
+    return decodeURIComponent(pathAfterUpload);
+  } catch {
+    return null;
+  }
+};
+
 export const deleteMp3 = async (publicId) => {
-  if (!publicId) return;
+  if (!publicId) return null;
   if (!env.cloudinaryCloudName || !env.cloudinaryApiKey || !env.cloudinaryApiSecret) {
     console.warn('Skipping Cloudinary deletion because credentials are not configured.');
-    return;
+    return null;
   }
-  await cloudinary.uploader.destroy(publicId, { resource_type: 'video', invalidate: true });
+  const cleanPublicId = publicId.replace(/^v\d+\//, '').replace(/\.[^/.]+$/, '');
+  const result = await cloudinary.uploader.destroy(cleanPublicId, { resource_type: 'video', invalidate: true });
+  console.info('[cloudinary] MP3 deletion response', { publicId: cleanPublicId, result });
+  return result;
 };

@@ -1,7 +1,7 @@
 import Library from '../models/library.model.js';
 import Song from '../models/song.model.js';
 import mongoose from 'mongoose';
-import { deleteMp3 } from '../services/cloudinary.service.js';
+import { deleteMp3, extractCloudinaryPublicId } from '../services/cloudinary.service.js';
 
 export const createLibrary = async (request, response, next) => {
   try {
@@ -91,7 +91,8 @@ export const deleteLibrarySong = async (request, response, next) => {
       throw error;
     }
     try {
-      await deleteMp3(song.audio?.publicId);
+      const publicId = song.audio?.publicId || extractCloudinaryPublicId(song.audio?.url);
+      await deleteMp3(publicId);
     } catch (error) {
       console.error('Song deleted, but its Cloudinary asset could not be deleted.', error);
     }
