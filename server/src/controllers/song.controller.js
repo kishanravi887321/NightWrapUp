@@ -6,7 +6,7 @@ import { deleteMp3, extractCloudinaryPublicId } from '../services/cloudinary.ser
 
 export const saveSong = async (request, response, next) => {
   try {
-    const song = await queueSongSave({
+    const song = await saveSongNow({
       libraryId: request.params.libraryId,
       userId: request.user.id,
       youtubeUrl: request.body?.youtubeUrl,
@@ -15,9 +15,7 @@ export const saveSong = async (request, response, next) => {
     });
     response.status(200).json({
       success: true,
-      message: song.audio?.status === 'ready'
-        ? 'Song is ready.'
-        : 'Song accepted and will be available when MP3 processing finishes.',
+      message: 'Song saved successfully.',
       data: song,
     });
   } catch (error) {
@@ -25,7 +23,7 @@ export const saveSong = async (request, response, next) => {
   }
 };
 
-export const queueSongSave = async ({
+export const saveSongNow = async ({
   libraryId,
   userId,
   youtubeUrl,
@@ -68,97 +66,51 @@ export const queueSongSave = async ({
     });
     return existingSong;
   }
-  if (existingSong?.audio?.status === 'pending') {
-    console.info(`[${source}] Existing pending song reused`, {
-      songId: existingSong._id.toString(),
-      libraryId,
-      youtubeVideoId,
-    });
-    return existingSong;
-  }
+  const metadata = await fetchYouTubeMetadata(youtubeUrl, youtubeVideoId);
+  console.info(`[${source}] YouTube metadata ready`, {
+    youtubeVideoId,
+    title: metadata.title,
+    channelName: metadata.channelName,
+  });
+
+  const generatedAudio = await downloadMp3(youtubeUrl);
+  console.info(`[${source}] MP3 generated and uploaded`, {
+    youtubeVideoId,
+    cloudinaryPublicId: generatedAudio.cloudinaryPublicId,
+    size: generatedAudio.size,
+  });
 
   const song = await Song.findOneAndUpdate(
     { user: userId, library: library._id, youtubeVideoId },
     {
-      title: songInput.title || existingSong?.title || `YouTube video ${youtubeVideoId}`,
+      title: songInput.title || metadata.title || existingSong?.title || `YouTube video ${youtubeVideoId}`,
       youtubeUrl,
       youtubeVideoId,
-      thumbnail: songInput.thumbnail || existingSong?.thumbnail,
-      channelName: songInput.channelName || existingSong?.channelName,
-      audio: { status: 'pending', provider: 'cloudinary' },
+      thumbnail: songInput.thumbnail || metadata.thumbnail || existingSong?.thumbnail,
+      channelName: songInput.channelName || metadata.channelName || existingSong?.channelName,
+      audio: {
+        url: generatedAudio.url,
+        publicId: generatedAudio.cloudinaryPublicId,
+        status: 'ready',
+        quality: generatedAudio.quality,
+        size: generatedAudio.size,
+        duration: generatedAudio.duration,
+        provider: 'cloudinary',
+      },
       user: userId,
       library: library._id,
     },
     { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
   );
-  console.info(`[${source}] Song queued`, {
+  console.info(`[${source}] Song saved`, {
     songId: song._id.toString(),
     libraryId,
     youtubeVideoId,
     audioStatus: song.audio?.status,
   });
 
-  setImmediate(() => {
-    void processSongAudio({
-      songId: song._id,
-      libraryId,
-      userId,
-      youtubeUrl,
-      source,
-    });
-  });
-
   return song;
 };
-
-async function processSongAudio({ songId, libraryId, userId, youtubeUrl, source }) {
-  try {
-    const youtubeVideoId = extractYouTubeVideoId(youtubeUrl);
-    const metadata = await fetchYouTubeMetadata(youtubeUrl, youtubeVideoId);
-    const generatedAudio = await downloadMp3(youtubeUrl);
-    const song = await Song.findOneAndUpdate(
-      { _id: songId, library: libraryId, user: userId },
-      {
-        title: metadata.title || generatedAudio.title || `YouTube video ${youtubeVideoId}`,
-        thumbnail: metadata.thumbnail,
-        channelName: metadata.channelName,
-        audio: {
-          url: generatedAudio.url,
-          publicId: generatedAudio.cloudinaryPublicId,
-          status: 'ready',
-          quality: generatedAudio.quality,
-          size: generatedAudio.size,
-          duration: generatedAudio.duration,
-          provider: 'cloudinary',
-        },
-      },
-      { new: true, runValidators: true },
-    );
-    console.info(`[${source}] Background song processing completed`, {
-      songId: song?._id?.toString(),
-      libraryId,
-      youtubeVideoId,
-      audioStatus: song?.audio?.status,
-      cloudinaryPublicId: generatedAudio.cloudinaryPublicId,
-    });
-  } catch (error) {
-    await Song.findOneAndUpdate(
-      { _id: songId, library: libraryId, user: userId },
-      { audio: { status: 'failed', provider: 'cloudinary' } },
-    ).catch((updateError) => {
-      console.error(`[${source}] Failed to mark background song processing failed`, {
-        songId: songId.toString(),
-        message: updateError.message,
-      });
-    });
-    console.error(`[${source}] Background song processing failed`, {
-      songId: songId.toString(),
-      libraryId,
-      message: error.message,
-      statusCode: error.statusCode || 500,
-    });
-  }
-}
 
 async function fetchYouTubeMetadata(youtubeUrl, youtubeVideoId) {
   const fallback = {

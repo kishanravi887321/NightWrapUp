@@ -1,4 +1,4 @@
-import { queueSongSave } from './song.controller.js';
+import { saveSongNow } from './song.controller.js';
 
 export const createMp3 = async (request, response, next) => {
   const youtubeUrl = request.body?.youtubeUrl || request.body?.url || request.query?.url;
@@ -12,14 +12,14 @@ export const createMp3 = async (request, response, next) => {
   });
 
   try {
-    const song = await queueSongSave({
+    const song = await saveSongNow({
       libraryId,
       userId: request.user.id,
       youtubeUrl,
       songInput: request.body,
       source: 'mobile-save',
     });
-    console.info('[media-mp3] Request accepted for background processing', {
+    console.info('[media-mp3] Download, upload, and database save completed', {
       userId: request.user.id,
       libraryId,
       songId: song._id.toString(),
@@ -28,9 +28,7 @@ export const createMp3 = async (request, response, next) => {
 
     response.status(200).json({
       success: true,
-      message: song.audio?.status === 'ready'
-        ? 'Song is ready.'
-        : 'Song accepted and will be available when MP3 processing finishes.',
+      message: 'Song saved successfully.',
       data: {
         song,
         status: song.audio?.status,
