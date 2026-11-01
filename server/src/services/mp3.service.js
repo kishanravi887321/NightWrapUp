@@ -5,11 +5,7 @@ import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { uploadMp3 } from './cloudinary.service.js';
 
-const infoEndpoint = 'https://embedded.flashdl.one/api/info.php';
-const progressEndpoint = 'https://api.ytnow.online/wp-json/rapid-api/v1/progress';
-const allowedDownloadHosts = new Set(['ex.speedlycdn.online']);
-const pollIntervalMs = 2000;
-const maxPollAttempts = 45;
+const cutterKoEndpoint = 'https://cutter-ko-a071.onrender.com/mp3';
 
 export const downloadMp3 = async (youtubeUrl) => {
   const videoId = extractYouTubeVideoId(youtubeUrl);
@@ -20,35 +16,18 @@ export const downloadMp3 = async (youtubeUrl) => {
   }
   console.info('[mp3] Starting media preparation', { videoId });
 
-  const info = await requestInfo(videoId);
-  const audio = info.audios?.[0];
-  if (!audio?.id) {
-    const error = new Error('No MP3 audio format is available for this video.');
-    error.statusCode = 422;
-    throw error;
-  }
-  console.info('[mp3] Audio format found', {
-    videoId,
-    audioId: audio.id,
-    quality: audio.quality,
-    size: audio.size,
-  });
-
-  const completed = await waitForAudio(audio.id);
-  console.info('[mp3] Media processing complete', {
-    videoId,
-    audioId: audio.id,
-    quality: completed.quality,
-    size: completed.size,
-  });
-  const downloadUrl = validateDownloadUrl(completed.url);
-  const filename = `${sanitizeFilename(completed.title || info.title || videoId)}-${videoId}.mp3`;
+  const downloadUrl = new URL(cutterKoEndpoint);
+  downloadUrl.searchParams.set('url', youtubeUrl.trim());
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'nightwrapup-'));
-  const targetPath = join(temporaryDirectory, filename);
-  const temporaryPath = `${targetPath}.part`;
 
   try {
-    await downloadFile(downloadUrl, temporaryPath);
+    const { filename, size } = await downloadFile(
+      downloadUrl.href,
+      temporaryDirectory,
+      videoId,
+    );
+    const targetPath = join(temporaryDirectory, filename);
+    const temporaryPath = `${targetPath}.part`;
     await rename(temporaryPath, targetPath);
     console.info('[mp3] MP3 downloaded locally', { videoId, filename });
 
@@ -64,10 +43,10 @@ export const downloadMp3 = async (youtubeUrl) => {
 
     return {
       filename,
-      title: completed.title || info.title || videoId,
-      quality: completed.quality || 'mp3',
-      size: completed.size,
-      duration: info.duration,
+      title: filename.replace(/\.mp3$/i, ''),
+      quality: 'mp3',
+      size,
+      duration: undefined,
       url: cloudinaryAsset.secure_url,
       cloudinaryPublicId: cloudinaryAsset.public_id,
     };
@@ -81,69 +60,44 @@ export const downloadMp3 = async (youtubeUrl) => {
   }
 };
 
-async function requestInfo(videoId) {
-  const body = new URLSearchParams({ url: videoId, refresh: '0' });
-  const response = await fetch(infoEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-    signal: AbortSignal.timeout(15000),
-  });
-  const data = await readJson(response, 'Unable to read media information.');
-  if (!data.ok) throw serviceError('The media service could not process this video.', 502);
-  console.info('[mp3] Media information received', {
-    videoId,
-    title: data.title,
-    audioCount: data.audios?.length || 0,
-  });
-  return data;
-}
-
-async function waitForAudio(audioId) {
-  for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
-    const response = await fetch(progressEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: audioId }),
-      signal: AbortSignal.timeout(15000),
-    });
-    const data = await readJson(response, 'Unable to read MP3 processing status.');
-    if (data.success && data.status === 'done' && data.url) return data;
-    if (data.status === 'error' || data.success === false) {
-      throw serviceError('The media service failed to create the MP3.', 502);
-    }
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-  }
-  throw serviceError('MP3 processing timed out.', 504);
-}
-
-function validateDownloadUrl(value) {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:' || !allowedDownloadHosts.has(url.hostname)) {
-      throw new Error();
-    }
-    return url.href;
-  } catch {
-    throw serviceError('The media service returned an invalid download URL.', 502);
-  }
-}
-
-async function downloadFile(url, targetPath) {
+async function downloadFile(url, temporaryDirectory, videoId) {
   const response = await fetch(url, { signal: AbortSignal.timeout(120000) });
   if (!response.ok || !response.body) {
-    throw serviceError('Unable to download the generated MP3 file.', 502);
+    let message = 'Unable to download the generated MP3 file.';
+    try {
+      const errorBody = await response.json();
+      if (typeof errorBody.error === 'string' && errorBody.error.trim()) {
+        message = errorBody.error.trim();
+      }
+    } catch {
+      // The service may return a non-JSON error body.
+    }
+    throw serviceError(message, response.status >= 400 && response.status < 500 ? 422 : 502);
   }
-  await pipeline(response.body, createWriteStream(targetPath));
+
+  const filename = getResponseFilename(response.headers.get('content-disposition'), videoId);
+  const temporaryPath = join(temporaryDirectory, `${filename}.part`);
+  await pipeline(response.body, createWriteStream(temporaryPath));
+  return {
+    filename,
+    size: Number(response.headers.get('content-length')) || undefined,
+  };
 }
 
-async function readJson(response, message) {
-  if (!response.ok) throw serviceError(message, 502);
-  try {
-    return await response.json();
-  } catch {
-    throw serviceError(message, 502);
+function getResponseFilename(contentDisposition, videoId) {
+  const encodedMatch = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i);
+  const plainMatch = contentDisposition?.match(/filename="?([^";]+)"?/i);
+  let filename = encodedMatch?.[1] || plainMatch?.[1];
+
+  if (filename) {
+    try {
+      filename = decodeURIComponent(filename);
+    } catch {
+      filename = null;
+    }
   }
+
+  return `${sanitizeFilename(filename?.replace(/\.mp3$/i, '') || videoId)}.mp3`;
 }
 
 function extractYouTubeVideoId(value) {

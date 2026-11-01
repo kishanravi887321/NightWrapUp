@@ -19,6 +19,7 @@ import AuthScreen from './components/AuthScreen';
 import AudioPlayer from './components/AudioPlayer';
 import PlayerControls from './components/PlayerControls';
 import YouTubePlayer, { PlayerApi } from './components/YouTubePlayer';
+import GuideScreen from './components/GuideScreen';
 
 function App() {
   const [session, setSession] = useState<AuthSession | null>(() => {
@@ -45,7 +46,7 @@ function App() {
   const [loadingLibraries, setLoadingLibraries] = useState(false);
   const [loadingSongs, setLoadingSongs] = useState(false);
   const [error, setError] = useState('');
-  const [activeView, setActiveView] = useState<'studio' | 'profile'>('studio');
+  const [activeView, setActiveView] = useState<'studio' | 'profile' | 'guide'>('studio');
   const [mobileSecretKey, setMobileSecretKey] = useState('');
   const [mobileKeyInput, setMobileKeyInput] = useState('');
   const [showMobileSecretKey, setShowMobileSecretKey] = useState(false);
@@ -301,6 +302,7 @@ function App() {
           <button className="app-brand" type="button" onClick={() => setActiveView('studio')}>NW <span>NightWrapUp</span></button>
           <button className={`nav-link ${activeView === 'studio' ? 'active' : ''}`} type="button" onClick={() => setActiveView('studio')}>Studio</button>
           <button className={`nav-link ${activeView === 'profile' ? 'active' : ''}`} type="button" onClick={() => setActiveView('profile')}>Profile</button>
+          <button className={`nav-link ${activeView === 'guide' ? 'active' : ''}`} type="button" onClick={() => setActiveView('guide')}>How to use</button>
         </nav>
         {error && (
           <div className="app-alert" role="alert">
@@ -308,7 +310,9 @@ function App() {
             <button type="button" onClick={() => setError('')}>Dismiss</button>
           </div>
         )}
-        {activeView === 'profile' ? (
+        {activeView === 'guide' ? (
+          <GuideScreen onBack={() => setActiveView('studio')} />
+        ) : activeView === 'profile' ? (
           <section className="profile-page glass-card">
             <button className="back-link" type="button" onClick={() => setActiveView('studio')}>← Back to studio</button>
             <div className="profile-page-heading">

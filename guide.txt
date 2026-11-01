@@ -1,0 +1,546 @@
+﻿================================================================================
+             NIGHTWRAPUP -- HOW THE THREE PROJECTS ARE CONNECTED
+================================================================================
+
+Written: October 2026
+
+TABLE OF CONTENTS:
+  1.  Overview
+  2.  The Three Projects at a Glance
+  3.  Shared Infrastructure (The Backbone)
+  4.  Project 1 -- NightWrapUp (Web App + Backend Server)
+  5.  Project 2 -- NightWrapUp--Bot (Chrome Browser Extension)
+  6.  Project 3 -- NighWrapExpoReactNativeApp (Mobile App)
+  7.  How All Three Connect to the Same API
+  8.  Authentication Flow -- Three Different Auth Paths
+  9.  Shared Data Model (Song and Library)
+ 10.  Data Flow Diagram (Text-Based)
+ 11.  Deployed URLs and Environments
+ 12.  Step-by-Step: What Happens When You Save a Song
+ 13.  Step-by-Step: What Happens When You Play a Song on Mobile
+ 14.  Security Model Summary
+ 15.  Development Setup Checklist
+
+
+================================================================================
+1. OVERVIEW -- WHAT IS NIGHTWRAPUP?
+================================================================================
+
+NightWrapUp is a personal YouTube music library system. The core idea is:
+
+  Browse YouTube -> click a button -> save the video to your music library.
+  Later, listen to just the audio on any device.
+
+The system has three client surfaces:
+  - Web App      (browser,        React + Vite)
+  - Extension    (Chrome,         Manifest v3)
+  - Mobile App   (iOS + Android,  Expo / React Native)
+
+All three talk to ONE shared backend server. The backend converts YouTube
+video URLs into hosted MP3 files on Cloudinary and serves them via REST API.
+
+
+================================================================================
+2. THE THREE PROJECTS AT A GLANCE
+================================================================================
+
+  Folder                             Role            Tech Stack
+  -----------------------------------------------------------------------
+  NightWrapUp\client\            Web frontend    React 18, Vite, TypeScript
+  NightWrapUp\server\            API backend     Node.js, Express, MongoDB,
+                                                 Cloudinary, Google OAuth
+  -----------------------------------------------------------------------
+  NightWrapUp--Bot\NightY\       Browser Ext.    Chrome Manifest v3, Vanilla JS
+  -----------------------------------------------------------------------
+  NighWrapExpoReactNativeApp\Nighty\  Mobile App  Expo, React Native, TypeScript
+  -----------------------------------------------------------------------
+
+All three share:
+  - Same Production API    : https://apinightwrapup.ziax.online/api
+  - Same MongoDB database  : (accessed ONLY by the server)
+  - Same Cloudinary CDN    : (audio MP3 files)
+  - Same Song + Library data model
+
+
+================================================================================
+3. SHARED INFRASTRUCTURE (THE BACKBONE)
+================================================================================
+
+     +------------------------------+
+     |     MongoDB Atlas            |
+     |  Users / Libraries / Songs   |
+     +-------------+----------------+
+                   |
+     +-------------v----------------+
+     |     Cloudinary CDN           |
+     |     (MP3 audio files)        |
+     +-------------+----------------+
+                   |
+     +-------------v------------------------------------+
+     |    Express / Node.js Server                      |
+     |    apinightwrapup.ziax.online                    |
+     |                                                  |
+     |  /api/auth/**       -- authentication            |
+     |  /api/libraries/**  -- library & song CRUD       |
+     |  /api/extension/**  -- extension-only endpoints  |
+     |  /api/mobile/**     -- mobile-only endpoints     |
+     |  /api/media/**      -- Cloudinary operations     |
+     |  /api/health        -- health check              |
+     +----------+-------------------+-----------+-------+
+                |                   |           |
+         +------v------+  +---------v---+  +----v------+
+         | Web App     |  | Chrome Ext. |  | Mobile    |
+         | (React)     |  | (NightY)    |  | (Expo RN) |
+         +-------------+  +-------------+  +-----------+
+
+
+================================================================================
+4. PROJECT 1 -- NIGHTWRAPUP (WEB APP + BACKEND SERVER)
+================================================================================
+
+Location: D:\MainPojects\NightWrapUp\
+  client\ -- Vite + React + TypeScript frontend
+  server\ -- Express + Node.js backend (the central API)
+
+--- WEB FRONTEND (client\) ---
+  API calls   : client\src\api.ts
+  Components  : AudioPlayer, AuthScreen, PlayerControls, YouTubePlayer
+
+  Deployed at   : https://nightwrapup.ziax.online
+  Prod API URL  : https://apinightwrapup.ziax.online/api
+  Dev API URL   : http://localhost:5000/api
+
+  Auth: Google OAuth via @react-oauth/google
+    User clicks "Sign in with Google"
+    -> Google returns credential token
+    -> POST /api/auth/google
+    -> Server verifies with Google, finds/creates User in MongoDB
+    -> Server sets httpOnly cookie (accessToken + refreshToken)
+    -> All future requests automatically include cookies
+
+  Key features:
+    - Manage music libraries
+    - View and play songs
+    - Generate "extension token" for the browser extension
+    - Generate "mobile secret key" for the mobile app
+
+--- BACKEND SERVER (server\) ---
+  Entry point : server\server.js
+  App setup   : server\src\app.js
+  Database    : server\src\db\connect.js (MongoDB via Mongoose)
+
+  AUTH ROUTES:
+    POST   /api/auth/google           Google OAuth login (web)
+    POST   /api/auth/refresh          Refresh session (web, cookie-based)
+    POST   /api/auth/mobile-login     Login for mobile (secret key)
+    POST   /api/auth/mobile-refresh   Refresh session for mobile (JWT)
+    POST   /api/auth/extension-token  Generate token for extension
+    POST   /api/auth/mobile-key       Create mobile secret key
+    DELETE /api/auth/mobile-key       Revoke mobile secret key
+    POST   /api/auth/logout           Logout (web)
+
+  LIBRARY + SONG ROUTES:
+    GET    /api/libraries                          List libraries
+    POST   /api/libraries                          Create library (web)
+    DELETE /api/libraries/:id                      Delete library
+    GET    /api/libraries/:id/songs                List songs
+    DELETE /api/libraries/:id/songs/:songId        Delete song
+    POST   /api/libraries/:id/songs/:songId/play   Record play count
+
+  EXTENSION ROUTES:
+    GET    /api/extension/libraries                List libraries
+    POST   /api/extension/libraries                Create library
+    PUT    /api/extension/libraries/:id/songs      Save a YouTube song
+
+  MOBILE ROUTES:
+    POST   /api/mobile/libraries                   Create library
+    DELETE /api/mobile/songs/:songId               Delete song
+    DELETE /api/mobile/songs                       Delete song (body)
+    POST   /api/mobile/songs/delete                Delete song (fallback)
+
+
+================================================================================
+5. PROJECT 2 -- NIGHTWRAPUP--BOT (CHROME BROWSER EXTENSION)
+================================================================================
+
+Location: D:\MainPojects\NightWrapUp--Bot\NightY\
+
+  manifest.json       -- Chrome Manifest v3 config
+  background.js       -- Service worker (save commands, token storage)
+  content-youtube.js  -- Injected into youtube.com pages
+  content-bridge.js   -- Injected into nightwrapup.ziax.online (token bridge)
+  content-frontend.js -- Integration script on the web app page
+  popup.html/popup.js -- Extension popup UI
+  modules\api.js      -- HTTP calls to /api/extension/**
+  modules\constants.js -- API_BASE_URL and shared constants
+  modules\storage.js  -- chrome.storage.local helpers
+  modules\youtube.js  -- YouTube URL detection
+
+--- HOW THE EXTENSION CONNECTS ---
+
+  The extension does NOT have its own login screen.
+  The user MUST be logged in to the web app first.
+
+  STEP 1: User logs in to https://nightwrapup.ziax.online
+  STEP 2: User clicks "Connect Extension" in web app settings
+            POST /api/auth/extension-token (web cookie session required)
+            Server returns a short-lived JWT { type: "extension" }
+  STEP 3: Web app sends the token via chrome.runtime.sendMessage()
+            content-bridge.js receives the message on the web app page
+            background.js checks: sender.origin === nightwrapup.ziax.online
+            Token stored in chrome.storage.local
+  STEP 4: User browses YouTube, opens the extension popup
+            Popup calls GET /api/extension/libraries (Bearer extensionToken)
+            User selects a library, clicks "Save"
+            background.js calls PUT /api/extension/libraries/:id/songs
+              Body: { youtubeUrl: "https://youtube.com/watch?v=..." }
+              Authorization: Bearer <extensionToken>
+            Server (extension-auth.js) verifies token type === "extension"
+            Song saved to MongoDB, MP3 conversion triggered
+
+  EXTENSION PERMISSIONS (manifest.json):
+    storage         -- chrome.storage.local (token + library selection)
+    tabs            -- read active tab URL
+    host_permissions:
+      https://apinightwrapup.ziax.online/*   (API calls)
+      https://nightwrapup.ziax.online/*      (token bridge)
+
+
+================================================================================
+6. PROJECT 3 -- NIGHWRAPEXPOREACTNATIVEAPP (MOBILE APP)
+================================================================================
+
+Location: D:\MainPojects\NighWrapExpoReactNativeApp\Nighty\
+
+  src\services\api.ts          -- All HTTP calls to the backend
+  src\services\localDownloads.ts -- Save MP3 files to device storage
+  src\services\localQueues.ts  -- Manage offline playback queues
+  src\components\LoginScreen.tsx      -- Mobile secret key login
+  src\components\LibraryScreen.tsx    -- Library list
+  src\components\TracksScreen.tsx     -- Song list for a library
+  src\components\BottomSheetPlayer.tsx -- Full-screen player
+  src\components\TopMusicPlayerCard.tsx -- Mini player card
+  src\components\RowWaveVisualizer.tsx  -- Waveform animation
+
+--- HOW THE MOBILE APP CONNECTS ---
+
+  STEP 1: SETUP (done once on the web app)
+    User logs into web app -> Settings -> "Generate Mobile Secret Key"
+    POST /api/auth/mobile-key  { secretKey }
+    Server hashes the key and stores it against the user account.
+
+  STEP 2: MOBILE LOGIN
+    User enters email + secret key in the mobile app
+    POST /api/auth/mobile-login  { email, secretKey }
+    Server validates email + hashed key
+    Returns: { accessToken, refreshToken }
+    Mobile stores BOTH in expo-secure-store (device keychain):
+      Key: nightwrapup_access_token
+      Key: nightwrapup_refresh_token
+
+  STEP 3: AUTHENTICATED REQUESTS
+    Every request: Authorization: Bearer <accessToken>
+    On 401: POST /api/auth/mobile-refresh  { refreshToken }
+    On success: new tokens stored, request retried once
+    On refresh fail: session cleared, user sent to login screen
+
+  STEP 4: PLAYING MUSIC
+    GET /api/libraries                       -- library list
+    GET /api/libraries/:id/songs             -- songs in library
+    Each song has: audio.url (Cloudinary) + audio.status
+    App plays when status === "ready" and audio.url is present
+    POST /api/libraries/:id/songs/:songId/play -- increments play count
+
+  STEP 5: OFFLINE DOWNLOADS (Optional)
+    localDownloads.ts downloads MP3 via File.downloadFileAsync()
+    Stored at: Paths.document/downloads/<songId>.mp3
+    getPlayableUri() checks local file first, falls back to Cloudinary URL
+    Works fully offline once downloaded
+
+
+================================================================================
+7. HOW ALL THREE CONNECT TO THE SAME API
+================================================================================
+
+  API Base URL: https://apinightwrapup.ziax.online/api
+
+  Client          Auth Method           Endpoints
+  -----------------------------------------------------------------------
+  Web App         httpOnly cookie       /auth/google, /auth/refresh,
+                  (set by server)       /auth/logout, /auth/extension-token,
+                                        /auth/mobile-key, /libraries/**
+  -----------------------------------------------------------------------
+  Chrome Ext.     Bearer JWT            /extension/libraries
+                  (extensionToken       /extension/libraries/:id/songs
+                   from web app)
+  -----------------------------------------------------------------------
+  Mobile App      Bearer JWT            /auth/mobile-login,
+                  (stored in            /auth/mobile-refresh,
+                   expo-secure-store)   /libraries/**, /mobile/**
+  -----------------------------------------------------------------------
+
+  The server uses TWO different auth middlewares:
+    auth.js           -- verifies accessToken (web cookies OR mobile Bearer)
+    extension-auth.js -- verifies extensionToken (extension Bearer ONLY)
+
+
+================================================================================
+8. AUTHENTICATION FLOW -- THREE DIFFERENT AUTH PATHS
+================================================================================
+
+PATH A -- WEB APP (Google OAuth + Cookies)
+  User -> "Sign in with Google"
+       -> POST /api/auth/google { credential }
+       -> Server verifies with google-auth-library
+       -> Server returns httpOnly cookies (accessToken, refreshToken)
+       -> All fetch requests use credentials: 'include'
+       -> Refresh: POST /api/auth/refresh (cookie-based)
+       -> Logout:  POST /api/auth/logout (clears cookies)
+
+PATH B -- CHROME EXTENSION (Extension Token via Bridge)
+  PREREQ: User must be logged into the web app
+  1. User clicks "Connect Extension" in web app settings
+  2. POST /api/auth/extension-token (web cookie auth)
+  3. Server creates short-lived JWT { type: "extension", sub: userId }
+  4. Web page sends: chrome.runtime.sendMessage({ type: "STORE_EXTENSION_TOKEN", token })
+  5. background.js verifies sender.origin === nightwrapup.ziax.online
+  6. Token saved to chrome.storage.local
+  7. Extension sends: Authorization: Bearer <extensionToken>
+  8. extension-auth.js verifies token type === "extension"
+
+PATH C -- MOBILE APP (Secret Key + JWT Tokens)
+  SETUP (web app, once):
+    User -> Settings -> "Generate Mobile Secret Key"
+    POST /api/auth/mobile-key { secretKey }
+    Server bcrypt-hashes key, stores on user account
+
+  LOGIN (mobile app):
+    User enters email + secret key
+    POST /api/auth/mobile-login { email, secretKey }
+    Server returns { accessToken, refreshToken }
+    Mobile stores both in expo-secure-store
+    Requests use: Authorization: Bearer <accessToken>
+    On 401: POST /api/auth/mobile-refresh { refreshToken }
+    On refresh fail: clear tokens -> redirect to login
+
+
+================================================================================
+9. SHARED DATA MODEL (SONG AND LIBRARY)
+================================================================================
+
+  USER
+  -----------------------------------------------------------------------
+  _id, email (unique), googleId
+  mobileSecretKey (bcrypt hashed), mobileSecretKeyCreatedAt
+  mobileSecretKeyLastUsedAt, mobileAccessEnabled
+  createdAt, updatedAt
+
+  LIBRARY
+  -----------------------------------------------------------------------
+  _id, user (-> User), name, description, songCount
+  createdAt, updatedAt
+
+  SONG
+  -----------------------------------------------------------------------
+  _id, user (-> User), library (-> Library)
+  title, youtubeUrl, youtubeVideoId
+  thumbnail (YouTube thumbnail URL), channelName, playCount
+  audio: {
+    url       : Cloudinary MP3 URL (this is what gets played)
+    publicId  : Cloudinary asset ID
+    status    : "pending" | "ready" | "failed"
+    quality, size, duration (seconds), provider ("cloudinary")
+  }
+  createdAt, updatedAt
+
+  UNIQUE INDEX: { user, library, youtubeVideoId }
+    -> Prevents saving the same YouTube video twice in a library
+
+  AUDIO STATUS FLOW:
+    "pending" -> server processes YouTube video -> "ready" or "failed"
+    Web app and mobile app check audio.status before showing play button
+
+
+================================================================================
+10. DATA FLOW DIAGRAM (TEXT-BASED)
+================================================================================
+
+  [YouTube Video URL]
+         |
+         v
+  +---------------------------------------------+
+  |  Save Song Request (any client)              |
+  |  PUT /api/extension/libraries/:id/songs  OR  |
+  |  PUT /api/libraries/:id/songs                |
+  +-------------------+-------------------------+
+                      |
+                      v
+  +---------------------------------------------+
+  |  Backend Server (Express)                    |
+  |  1. Validate auth token                      |
+  |  2. Extract YouTube video ID                 |
+  |  3. Fetch video metadata (title, thumbnail)  |
+  |  4. Create Song in MongoDB (status: pending) |
+  |  5. mp3.service.js: download + Cloudinary    |
+  |  6. Update Song: audio.url, status: ready    |
+  +---------------------------------------------+
+                      |
+             song.audio.url (Cloudinary CDN)
+                      |
+         +------------+------------+
+         |                         |
+  +------v------+          +-------v--------+
+  |  Web App    |          |  Mobile App    |
+  |  AudioPlayer|          |  Expo Audio    |
+  |  component  |          |  (Cloudinary   |
+  +-------------+          |   or local)    |
+                           +----------------+
+
+
+================================================================================
+11. DEPLOYED URLS AND ENVIRONMENTS
+================================================================================
+
+  Service         Production URL                           Dev URL
+  -----------------------------------------------------------------------
+  Backend API     https://apinightwrapup.ziax.online/api  http://localhost:5000/api
+  Web Frontend    https://nightwrapup.ziax.online         http://localhost:5173
+  Extension       (installed in Chrome, no URL)           (load unpacked)
+  Mobile App      (Expo Go or EAS build)                  (Expo dev server)
+  -----------------------------------------------------------------------
+
+  Both backend and web frontend are deployed on Vercel (vercel.json in each).
+
+  Mobile app hardcodes API URL in src\services\api.ts:
+    export const API_BASE_URL = 'https://apinightwrapup.ziax.online/api';
+
+  Web client uses Vite env to switch:
+    PROD -> https://apinightwrapup.ziax.online/api
+    DEV  -> http://localhost:5000/api
+
+
+================================================================================
+12. STEP-BY-STEP: WHAT HAPPENS WHEN YOU SAVE A SONG
+================================================================================
+
+VIA CHROME EXTENSION:
+  1. User opens https://www.youtube.com/watch?v=XXXXX
+  2. content-youtube.js is injected automatically by Chrome
+  3. User clicks the NightWrapUp extension icon
+  4. popup.js calls GET /api/extension/libraries (Bearer extensionToken)
+  5. Libraries shown in popup; user selects one, clicks Save
+  6. popup.js sends message to background.js: { type: SAVE_ACTIVE_SONG }
+  7. background.js calls modules\api.js saveSong(libraryId, youtubeUrl)
+  8. PUT /api/extension/libraries/<id>/songs
+     Authorization: Bearer <extensionToken>
+     Body: { youtubeUrl: "https://youtube.com/watch?v=..." }
+  9. Server: extension-auth.js verifies token type === "extension"
+ 10. Song created in MongoDB (status: pending)
+ 11. mp3.service.js downloads + uploads to Cloudinary
+ 12. Song updated: audio.url = Cloudinary URL, status = ready
+ 13. Extension shows green badge on toolbar icon
+
+VIA MOBILE APP:
+  1. User logged in to mobile app
+  2. Opens a Library -> TracksScreen
+  3. Taps "Add Song", enters YouTube URL
+  4. requestWithAuth('/libraries/:id/songs', { method: PUT })
+     Authorization: Bearer <accessToken>
+  5. Server flow same as steps 9-12 above
+  6. Song appears in library as "pending" initially
+  7. Refresh -> shows "ready" with play button enabled
+
+
+================================================================================
+13. STEP-BY-STEP: WHAT HAPPENS WHEN YOU PLAY A SONG ON MOBILE
+================================================================================
+
+  1. TracksScreen: GET /api/libraries/:libraryId/songs
+  2. Each song has audio.status + audio.url (when ready)
+  3. User taps a song with status "ready"
+  4. getPlayableUri(song, downloads) checks:
+       a. Local file at Paths.document\downloads\<songId>.mp3 ?
+          -> Yes: use local URI (offline-capable)
+       b. No: use song.audioUrl (Cloudinary CDN)
+  5. Expo Audio plays the URI
+  6. TopMusicPlayerCard + BottomSheetPlayer show controls
+  7. RowWaveVisualizer animates the waveform
+  8. On actual playback start:
+       POST /api/libraries/:libraryId/songs/:songId/play
+       -> increments song.playCount in MongoDB
+  9. Download for offline:
+       File.downloadFileAsync(song.audioUrl, destination)
+       -> saves to device, updates downloads-metadata.json
+
+
+================================================================================
+14. SECURITY MODEL SUMMARY
+================================================================================
+
+  What                    How Secured
+  -----------------------------------------------------------------------
+  Web sessions            httpOnly cookie (inaccessible from JS)
+                          Short-lived accessToken + longer refreshToken
+  Extension token         Short-lived JWT { type: "extension" }
+                          Verified by extension-auth.js
+                          Bridge validates sender.origin before storing
+  Mobile tokens           JWT stored in device secure keychain
+                          (Android Keystore / iOS Keychain)
+                          via expo-secure-store; NEVER in AsyncStorage
+  Mobile secret key       bcrypt-hashed in MongoDB
+                          Never stored in mobile app after login
+  CORS                    Allowed origins only:
+                            - nightwrapup.ziax.online
+                            - chrome-extension://* origins
+                            - moz-extension://* origins
+  MongoDB                 Only accessible by the backend server
+  JWT secrets             In server .env file; never in any client code
+  -----------------------------------------------------------------------
+
+  RULES FOR ALL CLIENTS:
+  - Never log tokens, keys, or Cloudinary URLs
+  - Never store tokens in plain text
+  - Always HTTPS in production
+  - Rotate refresh tokens on every successful refresh
+
+
+================================================================================
+15. DEVELOPMENT SETUP CHECKLIST
+================================================================================
+
+BACKEND SERVER:
+  cd D:\MainPojects\NightWrapUp\server
+  Copy .env.example to .env and fill in:
+    MONGODB_URI, JWT_SECRET, GOOGLE_CLIENT_ID,
+    CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+  npm install
+  npm run dev          <- http://localhost:5000
+
+WEB FRONTEND:
+  cd D:\MainPojects\NightWrapUp\client
+  Copy .env.example to .env
+  npm install
+  npm run dev          <- http://localhost:5173
+
+CHROME EXTENSION:
+  Open chrome://extensions
+  Enable "Developer mode"
+  Click "Load unpacked"
+  Select: D:\MainPojects\NightWrapUp--Bot\NightY\
+  Log in to web app -> generate extension token -> connect extension
+
+MOBILE APP:
+  cd D:\MainPojects\NighWrapExpoReactNativeApp\Nighty
+  npm install
+  npx expo start       <- scan QR with Expo Go, or press a/i for emulator
+  Login with email + mobile secret key (must be set on web app first)
+
+DEPENDENCY ORDER:
+  Backend MUST be running before any client works
+  Web app MUST be accessible before extension gets a token
+  Mobile secret key MUST be set on web before mobile login works
+
+
+================================================================================
+END OF GUIDE
+================================================================================

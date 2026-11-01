@@ -1,46 +1,128 @@
 import mongoose from 'mongoose';
 import Library from '../models/library.model.js';
 import Song from '../models/song.model.js';
-import { downloadMp3 } from '../services/mp3.service.js';
+import { downloadMp3 } from '../services/my.mp3download.reder.js';
 import { deleteMp3, extractCloudinaryPublicId } from '../services/cloudinary.service.js';
 
 export const saveSong = async (request, response, next) => {
   try {
-    const { libraryId } = request.params;
-    const { youtubeUrl } = request.body;
-    const library = await Library.findOne({ _id: libraryId, user: request.user.id });
-    if (!library) {
-      const error = new Error('Library not found.');
-      error.statusCode = 404;
-      throw error;
-    }
-    console.info('[extension-save] Library verified', { libraryId, userId: request.user.id });
-
-    const youtubeVideoId = extractYouTubeVideoId(youtubeUrl);
-    if (!youtubeVideoId) {
-      const error = new Error('A supported YouTube URL is required.');
-      error.statusCode = 400;
-      throw error;
-    }
-    console.info('[extension-save] YouTube URL validated', { youtubeVideoId });
-
-    const metadata = await fetchYouTubeMetadata(youtubeUrl, youtubeVideoId);
-    console.info('[extension-save] Metadata ready', {
-      youtubeVideoId,
-      title: metadata.title,
-      channelName: metadata.channelName,
+    const song = await queueSongSave({
+      libraryId: request.params.libraryId,
+      userId: request.user.id,
+      youtubeUrl: request.body?.youtubeUrl,
+      songInput: request.body,
+      source: 'extension-save',
     });
-    const existingSong = await Song.findOne({
-      user: request.user.id,
+    response.status(200).json({
+      success: true,
+      message: song.audio?.status === 'ready'
+        ? 'Song is ready.'
+        : 'Song accepted and will be available when MP3 processing finishes.',
+      data: song,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const queueSongSave = async ({
+  libraryId,
+  userId,
+  youtubeUrl,
+  songInput = {},
+  source = 'song-save',
+}) => {
+  if (typeof libraryId !== 'string' || !libraryId.trim()) {
+    const error = new Error('Library ID is required.');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (typeof youtubeUrl !== 'string' || !youtubeUrl.trim()) {
+    const error = new Error('A YouTube URL is required.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const library = await Library.findOne({ _id: libraryId, user: userId });
+  if (!library) {
+    const error = new Error('Library not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  console.info(`[${source}] Library verified`, { libraryId, userId });
+
+  const youtubeVideoId = extractYouTubeVideoId(youtubeUrl);
+  if (!youtubeVideoId) {
+    const error = new Error('A supported YouTube URL is required.');
+    error.statusCode = 400;
+    throw error;
+  }
+  console.info(`[${source}] YouTube URL validated`, { youtubeVideoId });
+
+  const existingSong = await Song.findOne({ user: userId, library: library._id, youtubeVideoId });
+  if (existingSong?.audio?.status === 'ready' && existingSong.audio.url) {
+    console.info(`[${source}] Existing ready song reused`, {
+      songId: existingSong._id.toString(),
+      libraryId,
+      youtubeVideoId,
+    });
+    return existingSong;
+  }
+  if (existingSong?.audio?.status === 'pending') {
+    console.info(`[${source}] Existing pending song reused`, {
+      songId: existingSong._id.toString(),
+      libraryId,
+      youtubeVideoId,
+    });
+    return existingSong;
+  }
+
+  const song = await Song.findOneAndUpdate(
+    { user: userId, library: library._id, youtubeVideoId },
+    {
+      title: songInput.title || existingSong?.title || `YouTube video ${youtubeVideoId}`,
+      youtubeUrl,
+      youtubeVideoId,
+      thumbnail: songInput.thumbnail || existingSong?.thumbnail,
+      channelName: songInput.channelName || existingSong?.channelName,
+      audio: { status: 'pending', provider: 'cloudinary' },
+      user: userId,
       library: library._id,
-      youtubeVideoId,
-    });
-    let audio = existingSong?.audio?.url ? existingSong.audio : undefined;
+    },
+    { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+  );
+  console.info(`[${source}] Song queued`, {
+    songId: song._id.toString(),
+    libraryId,
+    youtubeVideoId,
+    audioStatus: song.audio?.status,
+  });
 
-    if (!audio) {
-      try {
-        const generatedAudio = await downloadMp3(youtubeUrl);
-        audio = {
+  setImmediate(() => {
+    void processSongAudio({
+      songId: song._id,
+      libraryId,
+      userId,
+      youtubeUrl,
+      source,
+    });
+  });
+
+  return song;
+};
+
+async function processSongAudio({ songId, libraryId, userId, youtubeUrl, source }) {
+  try {
+    const youtubeVideoId = extractYouTubeVideoId(youtubeUrl);
+    const metadata = await fetchYouTubeMetadata(youtubeUrl, youtubeVideoId);
+    const generatedAudio = await downloadMp3(youtubeUrl);
+    const song = await Song.findOneAndUpdate(
+      { _id: songId, library: libraryId, user: userId },
+      {
+        title: metadata.title || generatedAudio.title || `YouTube video ${youtubeVideoId}`,
+        thumbnail: metadata.thumbnail,
+        channelName: metadata.channelName,
+        audio: {
           url: generatedAudio.url,
           publicId: generatedAudio.cloudinaryPublicId,
           status: 'ready',
@@ -48,51 +130,35 @@ export const saveSong = async (request, response, next) => {
           size: generatedAudio.size,
           duration: generatedAudio.duration,
           provider: 'cloudinary',
-        };
-        console.info('[extension-save] MP3 generated and uploaded', {
-          youtubeVideoId,
-          cloudinaryPublicId: audio.publicId,
-          size: audio.size,
-        });
-      } catch (error) {
-        console.error('Unable to generate and upload MP3 for extension save.', error);
-        const mediaError = new Error('The song was not saved because its MP3 could not be prepared.');
-        mediaError.statusCode = error.statusCode && error.statusCode < 500 ? error.statusCode : 502;
-        throw mediaError;
-      }
-    } else {
-      console.info('[extension-save] Existing Cloudinary MP3 reused', {
-        youtubeVideoId,
-        cloudinaryPublicId: audio.publicId,
-      });
-    }
-
-    const song = await Song.findOneAndUpdate(
-      { user: request.user.id, library: library._id, youtubeVideoId },
-      {
-        ...request.body,
-        title: request.body.title || metadata.title || `YouTube video ${youtubeVideoId}`,
-        youtubeUrl,
-        youtubeVideoId,
-        thumbnail: request.body.thumbnail || metadata.thumbnail,
-        channelName: request.body.channelName || metadata.channelName,
-        audio,
-        user: request.user.id,
-        library: library._id,
+        },
       },
-      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+      { new: true, runValidators: true },
     );
-    console.info('[extension-save] Song saved', {
-      songId: song._id.toString(),
+    console.info(`[${source}] Background song processing completed`, {
+      songId: song?._id?.toString(),
       libraryId,
       youtubeVideoId,
-      audioStatus: song.audio?.status,
+      audioStatus: song?.audio?.status,
+      cloudinaryPublicId: generatedAudio.cloudinaryPublicId,
     });
-    response.status(200).json({ success: true, data: song });
   } catch (error) {
-    next(error);
+    await Song.findOneAndUpdate(
+      { _id: songId, library: libraryId, user: userId },
+      { audio: { status: 'failed', provider: 'cloudinary' } },
+    ).catch((updateError) => {
+      console.error(`[${source}] Failed to mark background song processing failed`, {
+        songId: songId.toString(),
+        message: updateError.message,
+      });
+    });
+    console.error(`[${source}] Background song processing failed`, {
+      songId: songId.toString(),
+      libraryId,
+      message: error.message,
+      statusCode: error.statusCode || 500,
+    });
   }
-};
+}
 
 async function fetchYouTubeMetadata(youtubeUrl, youtubeVideoId) {
   const fallback = {

@@ -6,5 +6,6 @@ const router = Router();
 
 router.use(requireAuth);
 router.post('/mp3', createMp3);
+router.get('/mp3', createMp3);
 
 export default router;
