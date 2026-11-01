@@ -1,4 +1,5 @@
 import { createWriteStream } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -18,7 +19,8 @@ export const downloadMp3 = async (youtubeUrl) => {
   console.info('[mp3-cutter-ko] Starting media preparation', { videoId });
   const downloadUrl = new URL(cutterKoEndpoint);
   downloadUrl.searchParams.set('url', youtubeUrl.trim());
-  console.info('[mp3-cutter-ko] Request URL', { url: downloadUrl.href });
+  const requestId = randomUUID();
+  console.info('[mp3-cutter-ko] Request started', { requestId, videoId });
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'nightwrapup-mp3-'));
   let cloudinaryUploadCompleted = false;
 
@@ -27,6 +29,7 @@ export const downloadMp3 = async (youtubeUrl) => {
       downloadUrl.href,
       temporaryDirectory,
       videoId,
+      requestId,
     );
     console.info('[mp3-cutter-ko] MP3 saved temporarily', {
       videoId,
@@ -73,24 +76,55 @@ export const downloadMp3 = async (youtubeUrl) => {
   }
 };
 
-async function downloadFile(url, targetDirectory, videoId) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(300000) });
+async function downloadFile(url, targetDirectory, videoId, requestId) {
+  const startedAt = Date.now();
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { 'x-nightwrap-request-id': requestId },
+      signal: AbortSignal.timeout(300000),
+    });
+  } catch (error) {
+    console.error('[mp3-cutter-ko] Request failed before response', {
+      requestId,
+      videoId,
+      elapsedMs: Date.now() - startedAt,
+      errorName: error.name,
+      message: error.message,
+    });
+    throw serviceError(`CutterKo request failed: ${error.message}`, 502, requestId);
+  }
+
   console.info('[mp3-cutter-ko] Response received', {
+    requestId,
     status: response.status,
+    elapsedMs: Date.now() - startedAt,
     contentType: response.headers.get('content-type'),
     contentDisposition: response.headers.get('content-disposition'),
   });
   if (!response.ok || !response.body) {
-    let message = 'Unable to download the generated MP3 file.';
+    const responseText = await response.text().catch(() => '');
+    let message = `CutterKo returned HTTP ${response.status}.`;
     try {
-      const errorBody = await response.json();
+      const errorBody = JSON.parse(responseText);
       if (typeof errorBody.error === 'string' && errorBody.error.trim()) {
         message = errorBody.error.trim();
       }
     } catch {
-      // CutterKo may return a non-JSON error body.
+      if (responseText.trim()) message = responseText.trim().slice(0, 1000);
     }
-    throw serviceError(message, response.status >= 400 && response.status < 500 ? 422 : 502);
+    console.error('[mp3-cutter-ko] Upstream error response', {
+      requestId,
+      videoId,
+      status: response.status,
+      elapsedMs: Date.now() - startedAt,
+      body: responseText.slice(0, 2000),
+    });
+    throw serviceError(
+      message,
+      response.status >= 400 && response.status < 500 ? 422 : 502,
+      requestId,
+    );
   }
 
   const filename = getResponseFilename(response.headers.get('content-disposition'), videoId);
@@ -152,8 +186,9 @@ function sanitizeFilename(value) {
     .slice(0, 100) || 'audio';
 }
 
-function serviceError(message, statusCode) {
+function serviceError(message, statusCode, requestId) {
   const error = new Error(message);
   error.statusCode = statusCode;
+  if (requestId) error.requestId = requestId;
   return error;
 }

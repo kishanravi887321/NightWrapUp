@@ -4,6 +4,7 @@ const errorHandler = (error, _request, response, _next) => {
   response.status(error.statusCode || 500).json({
     success: false,
     message: error.message || 'Internal server error',
+    ...(error.requestId ? { requestId: error.requestId } : {}),
   });
 };
 
