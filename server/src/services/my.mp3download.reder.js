@@ -7,7 +7,8 @@ import { pipeline } from 'node:stream/promises';
 import { uploadMp3 } from './cloudinary.service.js';
 import env from '../config/env.js';
 
-const cutterKoEndpoint = env.cutterKoEndpoint;
+// const cutterKoEndpoint = env.cutterKoEndpoint;
+const cutterKoEndpoint = 'https://cutter-ko-a071.onrender.com/mp3';
 
 export const downloadMp3 = async (youtubeUrl) => {
   const videoId = extractYouTubeVideoId(youtubeUrl);
