@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { uploadMp3 } from './cloudinary.service.js';
+import env from '../config/env.js';
 
-const cutterKoEndpoint = 'https://cutter-ko-a071.onrender.com/mp3';
+const cutterKoEndpoint = env.cutterKoEndpoint;
 
 export const downloadMp3 = async (youtubeUrl) => {
   const videoId = extractYouTubeVideoId(youtubeUrl);
