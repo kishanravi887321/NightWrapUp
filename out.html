@@ -1,0 +1,144 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Player</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #0b1020;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 850px;
+            background: #151c30;
+            padding: 25px;
+            border-radius: 16px;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            flex: 1;
+            min-width: 0;
+            padding: 14px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0b1020;
+            color: white;
+            font-size: 15px;
+        }
+
+        button {
+            padding: 14px 22px;
+            border: none;
+            border-radius: 8px;
+            background: #2563eb;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .video-wrapper {
+            display: none;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 10px;
+        }
+
+        #message {
+            color: #f87171;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>YouTube Player</h2>
+
+        <div class="input-group">
+            <input
+                type="text"
+                id="youtubeUrl"
+                placeholder="Paste YouTube URL here..."
+            />
+            <button onclick="playVideo()">Play</button>
+        </div>
+
+        <p id="message"></p>
+
+        <div class="video-wrapper" id="videoWrapper">
+            <iframe
+                id="youtubePlayer"
+                allow="accelerometer; autoplay; clipboard-write;
+                       encrypted-media; gyroscope; picture-in-picture;
+                       web-share"
+                allowfullscreen>
+            </iframe>
+        </div>
+    </div>
+
+    <script>
+        function playVideo() {
+            const url = document.getElementById("youtubeUrl").value.trim();
+            const message = document.getElementById("message");
+            const wrapper = document.getElementById("videoWrapper");
+            const player = document.getElementById("youtubePlayer");
+
+            const pattern =
+                /(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+
+            const match = url.match(pattern);
+
+            if (!match) {
+                message.textContent = "Please enter a valid YouTube URL.";
+                wrapper.style.display = "none";
+                player.src = "";
+                return;
+            }
+
+            const videoId = match[1];
+
+            message.textContent = "";
+            player.src =
+                `https://www.youtube.com/embed/${videoId}`;
+
+            wrapper.style.display = "block";
+        }
+    </script>
+</body>
+</html>
