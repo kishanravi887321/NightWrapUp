@@ -12,9 +12,13 @@ const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME;
 const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
 const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
+const cutterKoEndpoint = process.env.CUTTER_KO_ENDPOINT;
 
 if (!jwtAccessSecret || !jwtRefreshSecret || !jwtExtensionSecret || !googleClientId) {
   throw new Error('JWT secrets and GOOGLE_CLIENT_ID are required in the environment.');
+}
+if (!cutterKoEndpoint) {
+  throw new Error('CUTTER_KO_ENDPOINT is required in the environment.');
 }
 
 export default {
@@ -31,7 +35,7 @@ export default {
   refreshTokenExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   extensionTokenExpiresIn: process.env.JWT_EXTENSION_EXPIRES_IN || '365d',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
-  cutterKoEndpoint: process.env.CUTTER_KO_ENDPOINT || 'http://3.26.164.101:8000/mp3',
+  cutterKoEndpoint,
   cutterKoApiKey: process.env.STREAM__VERIFY__KEY__FOR__CUTTERKO,
   corsOrigins: (process.env.CORS_ORIGINS ||
     'http://localhost:5173,https://nightwrapup.ziax.online')
