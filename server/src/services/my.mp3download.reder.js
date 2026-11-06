@@ -20,7 +20,6 @@ export const downloadMp3 = async (youtubeUrl) => {
 
   console.info('[mp3-cutter-ko] Starting media preparation', { videoId });
   const downloadUrl = new URL(cutterKoEndpoint);
-  downloadUrl.searchParams.set('url', youtubeUrl.trim());
   const requestId = randomUUID();
   console.info('[mp3-cutter-ko] Request started', { requestId, videoId });
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'nightwrapup-mp3-'));
@@ -32,6 +31,7 @@ export const downloadMp3 = async (youtubeUrl) => {
       temporaryDirectory,
       videoId,
       requestId,
+      youtubeUrl.trim(),
     );
     console.info('[mp3-cutter-ko] MP3 saved temporarily', {
       videoId,
@@ -78,12 +78,28 @@ export const downloadMp3 = async (youtubeUrl) => {
   }
 };
 
-async function downloadFile(url, targetDirectory, videoId, requestId) {
+async function downloadFile(url, targetDirectory, videoId, requestId, youtubeUrl) {
   const startedAt = Date.now();
+  if (!env.cutterKoApiKey) {
+    throw serviceError(
+      'CutterKo API key is not configured.',
+      500,
+      requestId,
+    );
+  }
+
   let response;
   try {
     response = await fetch(url, {
-      headers: { 'x-nightwrap-request-id': requestId },
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-nightwrap-request-id': requestId,
+      },
+      body: JSON.stringify({
+        url: youtubeUrl,
+        api_key: env.cutterKoApiKey,
+      }),
       signal: AbortSignal.timeout(300000),
     });
   } catch (error) {
